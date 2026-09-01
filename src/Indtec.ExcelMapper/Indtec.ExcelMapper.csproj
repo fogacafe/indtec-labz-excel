@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <PackageId>Indtec.ExcelMapper</PackageId>
+    <Version>0.1.0-alpha.1</Version>
+    <Authors>fogacafe</Authors>
+    <Company>Indtec</Company>
+    <Description>Source-generated Excel mapper for .NET with strongly typed import and export.</Description>
+    <PackageTags>excel xlsx mapper source-generator attributes closedxml</PackageTags>
+    <RepositoryUrl>https://github.com/fogacafe/indtec-labz-excel</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Indtec.ExcelMapper.Generators/Indtec.ExcelMapper.Generators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="../Indtec.ExcelMapper.Generators/bin/$(Configuration)/netstandard2.0/Indtec.ExcelMapper.Generators.dll"
+          Pack="true"
+          PackagePath="analyzers/dotnet/cs"
+          Visible="false" />
+  </ItemGroup>
+</Project>

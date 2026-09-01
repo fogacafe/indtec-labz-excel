@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore Indtec.ExcelMapper.sln
+
+      - name: Build
+        run: dotnet build Indtec.ExcelMapper.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test tests/Indtec.ExcelMapper.Tests/Indtec.ExcelMapper.Tests.csproj -c Release --no-build
+
+      - name: Pack
+        run: dotnet pack src/Indtec.ExcelMapper/Indtec.ExcelMapper.csproj -c Release --no-build -o ./artifacts
+
+      - name: Upload NuGet artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget
+          path: artifacts/*.nupkg

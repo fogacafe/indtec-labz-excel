@@ -1,0 +1,36 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Indtec.ExcelMapper", "src\Indtec.ExcelMapper\Indtec.ExcelMapper.csproj", "{F137706E-E010-4B53-8991-BE6B4BC2DB38}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Indtec.ExcelMapper.Generators", "src\Indtec.ExcelMapper.Generators\Indtec.ExcelMapper.Generators.csproj", "{E1F05B2C-A2D4-462B-96E0-DCBF00DBA0BC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Indtec.ExcelMapper.Tests", "tests\Indtec.ExcelMapper.Tests\Indtec.ExcelMapper.Tests.csproj", "{F903FBD9-12D2-4AF6-83E0-8625F5E5CEB3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Indtec.ExcelMapper.Sample", "samples\Indtec.ExcelMapper.Sample\Indtec.ExcelMapper.Sample.csproj", "{709EF403-77E7-4E1E-80ED-FB550FA37398}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F137706E-E010-4B53-8991-BE6B4BC2DB38}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F137706E-E010-4B53-8991-BE6B4BC2DB38}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F137706E-E010-4B53-8991-BE6B4BC2DB38}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F137706E-E010-4B53-8991-BE6B4BC2DB38}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E1F05B2C-A2D4-462B-96E0-DCBF00DBA0BC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E1F05B2C-A2D4-462B-96E0-DCBF00DBA0BC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E1F05B2C-A2D4-462B-96E0-DCBF00DBA0BC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E1F05B2C-A2D4-462B-96E0-DCBF00DBA0BC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F903FBD9-12D2-4AF6-83E0-8625F5E5CEB3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F903FBD9-12D2-4AF6-83E0-8625F5E5CEB3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F903FBD9-12D2-4AF6-83E0-8625F5E5CEB3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F903FBD9-12D2-4AF6-83E0-8625F5E5CEB3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{709EF403-77E7-4E1E-80ED-FB550FA37398}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{709EF403-77E7-4E1E-80ED-FB550FA37398}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{709EF403-77E7-4E1E-80ED-FB550FA37398}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{709EF403-77E7-4E1E-80ED-FB550FA37398}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
