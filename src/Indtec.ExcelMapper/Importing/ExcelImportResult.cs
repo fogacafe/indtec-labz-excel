@@ -2,14 +2,19 @@ namespace Indtec.ExcelMapper.Importing;
 
 public sealed class ExcelImportResult<T>
 {
-    internal ExcelImportResult(IReadOnlyList<T> items, IReadOnlyList<ExcelImportError> errors)
+    internal ExcelImportResult(
+        IReadOnlyList<T> items,
+        IReadOnlyList<ExcelImportError> errors,
+        IReadOnlyList<ExcelImportRow<T>>? rows = null)
     {
         Items = items;
         Errors = errors;
+        Rows = rows ?? Array.Empty<ExcelImportRow<T>>();
     }
 
     public IReadOnlyList<T> Items { get; }
     public IReadOnlyList<ExcelImportError> Errors { get; }
+    public IReadOnlyList<ExcelImportRow<T>> Rows { get; }
     public bool IsValid => Errors.Count == 0;
 }
 
