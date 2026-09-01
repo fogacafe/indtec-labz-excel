@@ -2,6 +2,18 @@
 
 All notable changes to `Indtec.ExcelMapper` are documented here.
 
+## 1.3.0
+
+- Built-in English and Brazilian Portuguese processing messages.
+- Configurable `ExcelLanguage` through `ExcelMapperOptions`.
+- Overridable messages through `IExcelMessageProvider` and `ExcelMessageProvider`.
+- Localized worksheet, required-column, conversion, workbook and template-validation messages.
+- Common display masks through `ExcelFormats` and a `DateFormat(...)` styling helper.
+- Memory-bounded `ImportChunksAsync<T>` for large worksheets using forward-only Open XML reading.
+- `ExcelImportChunk<T>` with chunk index, physical row range, valid items, parsed rows and structured errors.
+- Source-generated mappings, custom converters, local validation and collect/throw behavior preserved in streaming mode.
+- Full-sheet batch validators are explicitly rejected in streaming mode to avoid changing their semantics.
+
 ## 1.2.0
 
 - Async batch validation through `IExcelBatchValidator<T>`.
