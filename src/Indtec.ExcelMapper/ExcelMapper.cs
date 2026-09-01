@@ -3,6 +3,7 @@ using Indtec.ExcelMapper.Importing;
 using Indtec.ExcelMapper.Internal;
 using Indtec.ExcelMapper.Mapping;
 using Indtec.ExcelMapper.Styling;
+using Indtec.ExcelMapper.Workbooks;
 
 namespace Indtec.ExcelMapper;
 
@@ -87,11 +88,53 @@ public sealed class ExcelMapper
     {
         if (stream is null) throw new ArgumentNullException(nameof(stream));
 
-        var map = GetMap<T>();
         var options = new ExcelImportOptions<T>();
         configure?.Invoke(options);
 
         using var workbook = new XLWorkbook(stream);
+        return await ImportSheetAsync<T>(workbook, options, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<ExcelWorkbookImportResult> ImportWorkbookAsync(
+        Stream stream,
+        Action<ExcelWorkbookImportOptions> configure,
+        CancellationToken cancellationToken = default)
+    {
+        if (stream is null) throw new ArgumentNullException(nameof(stream));
+        if (configure is null) throw new ArgumentNullException(nameof(configure));
+
+        var options = new ExcelWorkbookImportOptions();
+        configure(options);
+
+        if (options.Sheets.Count == 0)
+            throw new ExcelMappingException("At least one sheet must be registered for workbook import.");
+
+        var duplicateModel = options.Sheets
+            .GroupBy(x => x.ModelType)
+            .FirstOrDefault(x => x.Count() > 1);
+
+        if (duplicateModel is not null)
+            throw new ExcelMappingException(
+                $"Model '{duplicateModel.Key.Name}' was registered more than once in the workbook import.");
+
+        using var workbook = new XLWorkbook(stream);
+        var results = new Dictionary<Type, object>();
+
+        foreach (var sheet in options.Sheets)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            results[sheet.ModelType] = await sheet.ImportAsync(this, workbook, cancellationToken).ConfigureAwait(false);
+        }
+
+        return new ExcelWorkbookImportResult(results);
+    }
+
+    internal async Task<ExcelImportResult<T>> ImportSheetAsync<T>(
+        XLWorkbook workbook,
+        ExcelImportOptions<T> options,
+        CancellationToken cancellationToken) where T : new()
+    {
+        var map = GetMap<T>();
         var worksheet = GetWorksheet(workbook, map);
         var headers = GetHeaders(worksheet, map);
 
@@ -246,19 +289,11 @@ public sealed class ExcelMapper
     {
         if (stream is null) throw new ArgumentNullException(nameof(stream));
 
-        var map = GetMap<T>();
         var options = new ExcelExportOptions<T>();
         configure?.Invoke(options);
 
-        if (options.TemplateRows < 1)
-            throw new ArgumentOutOfRangeException(nameof(options.TemplateRows), "TemplateRows must be greater than zero.");
-
         using var workbook = new XLWorkbook();
-        var worksheet = workbook.AddWorksheet(map.SheetName);
-
-        WriteHeaders(worksheet, map, options);
-        ApplyTemplateValidations(worksheet, map, options);
-        FinishWorksheet(worksheet, options);
+        AddTemplateSheet<T>(workbook, options);
         workbook.SaveAs(stream);
     }
 
@@ -272,6 +307,50 @@ public sealed class ExcelMapper
         if (path is null) throw new ArgumentNullException(nameof(path));
         using var stream = File.Create(path);
         CreateTemplate<T>(stream, configure);
+    }
+
+    public void CreateWorkbookTemplate(
+        Stream stream,
+        Action<ExcelWorkbookTemplateOptions> configure)
+    {
+        if (stream is null) throw new ArgumentNullException(nameof(stream));
+        if (configure is null) throw new ArgumentNullException(nameof(configure));
+
+        var options = new ExcelWorkbookTemplateOptions();
+        configure(options);
+
+        if (options.Sheets.Count == 0)
+            throw new ExcelMappingException("At least one sheet must be registered for workbook template generation.");
+
+        using var workbook = new XLWorkbook();
+        foreach (var sheet in options.Sheets)
+            sheet.AddSheet(this, workbook);
+
+        workbook.SaveAs(stream);
+    }
+
+    public void CreateWorkbookTemplate(
+        string path,
+        Action<ExcelWorkbookTemplateOptions> configure)
+    {
+        if (path is null) throw new ArgumentNullException(nameof(path));
+        using var stream = File.Create(path);
+        CreateWorkbookTemplate(stream, configure);
+    }
+
+    internal void AddTemplateSheet<T>(XLWorkbook workbook, ExcelExportOptions<T> options) where T : new()
+    {
+        if (options.TemplateRows < 1)
+            throw new ArgumentOutOfRangeException(nameof(options.TemplateRows), "TemplateRows must be greater than zero.");
+
+        var map = GetMap<T>();
+        if (workbook.Worksheets.Any(x => x.Name.Equals(map.SheetName, StringComparison.OrdinalIgnoreCase)))
+            throw new ExcelMappingException($"Worksheet '{map.SheetName}' was registered more than once.");
+
+        var worksheet = workbook.AddWorksheet(map.SheetName);
+        WriteHeaders(worksheet, map, options);
+        ApplyTemplateValidations(worksheet, map, options);
+        FinishWorksheet(worksheet, options);
     }
 
     private static IXLWorksheet GetWorksheet(XLWorkbook workbook, ExcelTypeMap map)
