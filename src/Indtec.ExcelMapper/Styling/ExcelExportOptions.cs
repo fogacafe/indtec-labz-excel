@@ -15,6 +15,7 @@ public sealed class ExcelExportOptions<T>
     public ExcelHeaderStyleBuilder Header => new(_headerStyle);
     public bool FreezeHeader { get; set; } = true;
     public bool AutoFilter { get; set; } = true;
+    public int TemplateRows { get; set; } = 1000;
 
     public ExcelExportOptions<T> UseTheme(IExcelTheme<T> theme)
     {
@@ -47,6 +48,7 @@ internal sealed class ExcelColumnStyleConfig<T>
 
     public string PropertyName { get; }
     public double? Width { get; set; }
+    public IReadOnlyList<string>? AllowedValues { get; set; }
     public ExcelStyle Style { get; } = new();
     public List<ExcelConditionalStyleRule<T>> Rules { get; } = new();
 }
@@ -93,6 +95,16 @@ public sealed class ExcelColumnStyleBuilder<T, TProperty> : ExcelStyleBuilder<Ex
     public ExcelColumnStyleBuilder<T, TProperty> Width(double width)
     {
         _config.Width = width;
+        return this;
+    }
+
+    public ExcelColumnStyleBuilder<T, TProperty> AllowedValues(params string[] values)
+    {
+        if (values is null) throw new ArgumentNullException(nameof(values));
+        if (values.Length == 0) throw new ArgumentException("At least one allowed value is required.", nameof(values));
+        if (values.Any(string.IsNullOrWhiteSpace)) throw new ArgumentException("Allowed values cannot contain empty values.", nameof(values));
+
+        _config.AllowedValues = values.Distinct(StringComparer.Ordinal).ToArray();
         return this;
     }
 
