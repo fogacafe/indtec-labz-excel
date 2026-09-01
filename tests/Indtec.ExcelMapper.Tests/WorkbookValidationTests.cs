@@ -13,15 +13,15 @@ public sealed class WorkbookValidationTests
         using var stream = new MemoryStream();
         using (var workbook = new XLWorkbook())
         {
-            var orders = workbook.AddWorksheet("Orders");
-            orders.Cell(1, 1).Value = "Id";
-            orders.Cell(1, 2).Value = "CustomerId";
-            orders.Cell(2, 1).Value = 1;
-            orders.Cell(2, 2).Value = 999;
+            var orderSheet = workbook.AddWorksheet("Orders");
+            orderSheet.Cell(1, 1).Value = "Id";
+            orderSheet.Cell(1, 2).Value = "CustomerId";
+            orderSheet.Cell(2, 1).Value = 1;
+            orderSheet.Cell(2, 2).Value = 999;
 
-            var customers = workbook.AddWorksheet("CustomerRefs");
-            customers.Cell(1, 1).Value = "Id";
-            customers.Cell(2, 1).Value = 42;
+            var customerSheet = workbook.AddWorksheet("CustomerRefs");
+            customerSheet.Cell(1, 1).Value = "Id";
+            customerSheet.Cell(2, 1).Value = 42;
 
             workbook.SaveAs(stream);
         }
@@ -57,15 +57,15 @@ public sealed class WorkbookValidationTests
         using var stream = new MemoryStream();
         using (var workbook = new XLWorkbook())
         {
-            var orders = workbook.AddWorksheet("Orders");
-            orders.Cell(1, 1).Value = "Id";
-            orders.Cell(1, 2).Value = "CustomerId";
-            orders.Cell(2, 1).Value = 1;
-            orders.Cell(2, 2).Value = 999;
+            var orderSheet = workbook.AddWorksheet("Orders");
+            orderSheet.Cell(1, 1).Value = "Id";
+            orderSheet.Cell(1, 2).Value = "CustomerId";
+            orderSheet.Cell(2, 1).Value = 1;
+            orderSheet.Cell(2, 2).Value = 999;
 
-            var customers = workbook.AddWorksheet("CustomerRefs");
-            customers.Cell(1, 1).Value = "Id";
-            customers.Cell(2, 1).Value = 42;
+            var customerSheet = workbook.AddWorksheet("CustomerRefs");
+            customerSheet.Cell(1, 1).Value = "Id";
+            customerSheet.Cell(2, 1).Value = 42;
 
             workbook.SaveAs(stream);
         }
