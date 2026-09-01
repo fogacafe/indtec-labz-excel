@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish:
@@ -33,5 +34,11 @@ jobs:
       - name: Pack
         run: dotnet pack src/Indtec.ExcelMapper/Indtec.ExcelMapper.csproj -c Release --no-build -o artifacts
 
+      - name: NuGet login
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: fogacafe
+
       - name: Publish NuGet
-        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
