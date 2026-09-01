@@ -126,6 +126,44 @@ public sealed class ExcelMapper
             results[sheet.ModelType] = await sheet.ImportAsync(this, workbook, cancellationToken).ConfigureAwait(false);
         }
 
+        foreach (var validator in options.Validators)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var context = new ExcelWorkbookValidationContext(results);
+            var validatorErrors = await validator.ValidateAsync(context, cancellationToken).ConfigureAwait(false)
+                ?? Array.Empty<ExcelWorkbookValidationError>();
+
+            if (validatorErrors.Count == 0)
+                continue;
+
+            foreach (var error in validatorErrors)
+            {
+                if (!results.ContainsKey(error.ModelType))
+                    throw new ExcelMappingException(
+                        $"Workbook validator returned an error for unregistered model '{error.ModelType.Name}'.");
+            }
+
+            var firstThrowingError = validatorErrors.FirstOrDefault(error =>
+                options.Sheets.Single(sheet => sheet.ModelType == error.ModelType).ShouldThrow);
+
+            if (firstThrowingError is not null)
+            {
+                var importError = new ExcelImportError(
+                    firstThrowingError.Row,
+                    firstThrowingError.Column,
+                    firstThrowingError.Message);
+
+                throw new ExcelMappingException(importError.ToString());
+            }
+
+            foreach (var group in validatorErrors.GroupBy(error => error.ModelType))
+            {
+                var registration = options.Sheets.Single(sheet => sheet.ModelType == group.Key);
+                results[group.Key] = registration.AddValidationErrors(results[group.Key], group.ToArray());
+            }
+        }
+
         return new ExcelWorkbookImportResult(results);
     }
 
@@ -200,13 +238,20 @@ public sealed class ExcelMapper
         if (options.ErrorBehavior == ExcelImportErrorBehavior.Throw && errors.Count > 0)
             throw new ExcelMappingException(errors[0].ToString());
 
+        var rows = parsedRows
+            .Select(row => new ExcelImportRow<T>(
+                row.RowNumber,
+                row.Value,
+                errors.Where(error => error.Row == row.RowNumber).ToArray()))
+            .ToArray();
+
         var invalidRows = new HashSet<int>(errors.Where(x => x.Row > 0).Select(x => x.Row));
-        var items = parsedRows
+        var items = rows
             .Where(row => !invalidRows.Contains(row.RowNumber))
             .Select(row => row.Value)
             .ToArray();
 
-        return new ExcelImportResult<T>(items, errors.ToArray());
+        return new ExcelImportResult<T>(items, errors.ToArray(), rows);
     }
 
     public void Export<T>(IEnumerable<T> items, Stream stream) where T : new()
