@@ -21,25 +21,13 @@ public sealed class ExcelMapper
         var options = new ExcelImportOptions<T>();
         configure?.Invoke(options);
 
-        using var workbook = new XLWorkbook(stream);
-        var worksheet = workbook.Worksheets.FirstOrDefault(x =>
-            x.Name.Equals(map.SheetName, StringComparison.OrdinalIgnoreCase));
-
-        if (worksheet is null)
-            throw new ExcelMappingException($"Worksheet '{map.SheetName}' was not found.");
-
-        var headers = worksheet.Row(1)
-            .CellsUsed()
-            .ToDictionary(x => x.GetString(), x => x.Address.ColumnNumber, StringComparer.OrdinalIgnoreCase);
-
-        var missingRequired = map.Columns
-            .Where(x => x.Required && !headers.ContainsKey(x.Header))
-            .Select(x => x.Header)
-            .ToArray();
-
-        if (missingRequired.Length > 0)
+        if (options.BatchValidators.Count > 0)
             throw new ExcelMappingException(
-                $"Required columns were not found in worksheet '{map.SheetName}': {string.Join(", ", missingRequired)}.");
+                "Batch validators require ImportAsync because they may perform asynchronous work.");
+
+        using var workbook = new XLWorkbook(stream);
+        var worksheet = GetWorksheet(workbook, map);
+        var headers = GetHeaders(worksheet, map);
 
         var items = new List<T>();
         var errors = new List<ExcelImportError>();
@@ -60,12 +48,7 @@ public sealed class ExcelMapper
 
                 try
                 {
-                    var cell = row.Cell(columnNumber);
-                    var value = column.Converter is null
-                        ? ExcelCellConverter.Read(cell, column.ValueType)
-                        : column.Converter.Read(ExcelCellConverter.ToExcelValue(cell), column.ValueType);
-
-                    column.Setter(item!, value);
+                    ReadCell(row, columnNumber, column, item);
                 }
                 catch (Exception ex) when (options.ErrorBehavior == ExcelImportErrorBehavior.Collect)
                 {
@@ -95,6 +78,92 @@ public sealed class ExcelMapper
         }
 
         return new ExcelImportResult<T>(items, errors);
+    }
+
+    public async ValueTask<ExcelImportResult<T>> ImportAsync<T>(
+        Stream stream,
+        Action<ExcelImportOptions<T>>? configure = null,
+        CancellationToken cancellationToken = default) where T : new()
+    {
+        if (stream is null) throw new ArgumentNullException(nameof(stream));
+
+        var map = GetMap<T>();
+        var options = new ExcelImportOptions<T>();
+        configure?.Invoke(options);
+
+        using var workbook = new XLWorkbook(stream);
+        var worksheet = GetWorksheet(workbook, map);
+        var headers = GetHeaders(worksheet, map);
+
+        var parsedRows = new List<(int RowNumber, T Value)>();
+        var errors = new List<ExcelImportError>();
+
+        foreach (var row in worksheet.RowsUsed().Skip(1))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var rowNumber = row.RowNumber();
+            var item = new T();
+            var rowErrors = new List<ExcelImportError>();
+
+            foreach (var column in map.Columns)
+            {
+                if (!headers.TryGetValue(column.Header, out var columnNumber))
+                    continue;
+
+                if (column.Setter is null)
+                    throw new ExcelMappingException(
+                        $"Property mapped to '{column.Header}' is read-only and cannot be imported.");
+
+                try
+                {
+                    ReadCell(row, columnNumber, column, item);
+                }
+                catch (Exception ex)
+                {
+                    rowErrors.Add(new ExcelImportError(rowNumber, column.Header, ex.Message));
+                }
+            }
+
+            if (rowErrors.Count == 0)
+            {
+                rowErrors.AddRange(options.Validators
+                    .Where(rule => !rule.Predicate(item))
+                    .Select(rule => new ExcelImportError(rowNumber, null, rule.Message)));
+            }
+
+            parsedRows.Add((rowNumber, item));
+            errors.AddRange(rowErrors);
+        }
+
+        foreach (var validator in options.BatchValidators)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var contextRows = parsedRows
+                .Select(row => new ExcelImportRow<T>(
+                    row.RowNumber,
+                    row.Value,
+                    errors.Where(error => error.Row == row.RowNumber).ToArray()))
+                .ToArray();
+
+            var context = new ExcelBatchValidationContext<T>(map.SheetName, contextRows);
+            var validatorErrors = await validator.ValidateAsync(context, cancellationToken).ConfigureAwait(false);
+
+            if (validatorErrors is not null)
+                errors.AddRange(validatorErrors);
+        }
+
+        if (options.ErrorBehavior == ExcelImportErrorBehavior.Throw && errors.Count > 0)
+            throw new ExcelMappingException(errors[0].ToString());
+
+        var invalidRows = new HashSet<int>(errors.Where(x => x.Row > 0).Select(x => x.Row));
+        var items = parsedRows
+            .Where(row => !invalidRows.Contains(row.RowNumber))
+            .Select(row => row.Value)
+            .ToArray();
+
+        return new ExcelImportResult<T>(items, errors.ToArray());
     }
 
     public void Export<T>(IEnumerable<T> items, Stream stream) where T : new()
@@ -203,6 +272,42 @@ public sealed class ExcelMapper
         if (path is null) throw new ArgumentNullException(nameof(path));
         using var stream = File.Create(path);
         CreateTemplate<T>(stream, configure);
+    }
+
+    private static IXLWorksheet GetWorksheet(XLWorkbook workbook, ExcelTypeMap map)
+    {
+        var worksheet = workbook.Worksheets.FirstOrDefault(x =>
+            x.Name.Equals(map.SheetName, StringComparison.OrdinalIgnoreCase));
+
+        return worksheet ?? throw new ExcelMappingException($"Worksheet '{map.SheetName}' was not found.");
+    }
+
+    private static Dictionary<string, int> GetHeaders(IXLWorksheet worksheet, ExcelTypeMap map)
+    {
+        var headers = worksheet.Row(1)
+            .CellsUsed()
+            .ToDictionary(x => x.GetString(), x => x.Address.ColumnNumber, StringComparer.OrdinalIgnoreCase);
+
+        var missingRequired = map.Columns
+            .Where(x => x.Required && !headers.ContainsKey(x.Header))
+            .Select(x => x.Header)
+            .ToArray();
+
+        if (missingRequired.Length > 0)
+            throw new ExcelMappingException(
+                $"Required columns were not found in worksheet '{map.SheetName}': {string.Join(", ", missingRequired)}.");
+
+        return headers;
+    }
+
+    private static void ReadCell<T>(IXLRow row, int columnNumber, ExcelColumnMap column, T item)
+    {
+        var cell = row.Cell(columnNumber);
+        var value = column.Converter is null
+            ? ExcelCellConverter.Read(cell, column.ValueType)
+            : column.Converter.Read(ExcelCellConverter.ToExcelValue(cell), column.ValueType);
+
+        column.Setter!(item!, value);
     }
 
     private static void WriteHeaders<T>(
