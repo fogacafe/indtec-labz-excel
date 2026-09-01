@@ -75,6 +75,7 @@ public class ExcelStyleBuilder<TBuilder> where TBuilder : ExcelStyleBuilder<TBui
     public TBuilder FontColor(string hex) { _style.FontColor = hex; return Self; }
     public TBuilder Background(string hex) { _style.Background = hex; return Self; }
     public TBuilder NumberFormat(string format) { _style.NumberFormat = format; return Self; }
+    public TBuilder DateFormat(string format) { _style.NumberFormat = format; return Self; }
     public TBuilder Align(ExcelHorizontalAlignment alignment) { _style.HorizontalAlignment = alignment; return Self; }
     public TBuilder Wrap(bool value = true) { _style.WrapText = value; return Self; }
     public TBuilder Border(bool value = true) { _style.Border = value; return Self; }
