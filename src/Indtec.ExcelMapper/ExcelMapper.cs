@@ -80,7 +80,7 @@ public sealed class ExcelMapper
         return new ExcelImportResult<T>(items, errors);
     }
 
-    public async ValueTask<ExcelImportResult<T>> ImportAsync<T>(
+    public async Task<ExcelImportResult<T>> ImportAsync<T>(
         Stream stream,
         Action<ExcelImportOptions<T>>? configure = null,
         CancellationToken cancellationToken = default) where T : new()
