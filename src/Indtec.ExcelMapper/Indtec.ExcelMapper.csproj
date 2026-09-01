@@ -2,14 +2,19 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <PackageId>Indtec.ExcelMapper</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
+    <Title>Indtec.ExcelMapper</Title>
     <Authors>fogacafe</Authors>
     <Company>Indtec</Company>
-    <Description>Source-generated Excel mapper for .NET with strongly typed import, export, reusable themes, converters and row-aware conditional styling.</Description>
-    <PackageTags>excel xlsx mapper source-generator attributes closedxml styling converter nuget</PackageTags>
+    <Description>Source-generated Excel mapper for .NET with strongly typed import/export, reusable themes, custom converters, required columns and row-aware conditional styling.</Description>
+    <PackageTags>excel;xlsx;mapper;source-generator;roslyn;attributes;closedxml;styling;converter;nuget</PackageTags>
+    <PackageProjectUrl>https://github.com/fogacafe/indtec-labz-excel</PackageProjectUrl>
     <RepositoryUrl>https://github.com/fogacafe/indtec-labz-excel</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageReleaseNotes>Documentation and package metadata polish. Release version is derived from the Git tag by the publishing workflow.</PackageReleaseNotes>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 
