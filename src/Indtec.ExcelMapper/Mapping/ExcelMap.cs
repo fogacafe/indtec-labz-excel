@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Indtec.ExcelMapper.Conversion;
 
 namespace Indtec.ExcelMapper.Mapping;
 
@@ -10,7 +11,9 @@ public sealed class ExcelColumnMap
         int order,
         Type valueType,
         Func<object, object?> getter,
-        Action<object, object?>? setter)
+        Action<object, object?>? setter,
+        bool required = false,
+        IExcelValueConverter? converter = null)
     {
         PropertyName = propertyName;
         Header = header;
@@ -18,6 +21,8 @@ public sealed class ExcelColumnMap
         ValueType = valueType;
         Getter = getter;
         Setter = setter;
+        Required = required;
+        Converter = converter;
     }
 
     public string PropertyName { get; }
@@ -26,6 +31,8 @@ public sealed class ExcelColumnMap
     public Type ValueType { get; }
     public Func<object, object?> Getter { get; }
     public Action<object, object?>? Setter { get; }
+    public bool Required { get; }
+    public IExcelValueConverter? Converter { get; }
 }
 
 public sealed class ExcelTypeMap

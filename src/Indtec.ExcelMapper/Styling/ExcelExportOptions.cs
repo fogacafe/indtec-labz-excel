@@ -16,6 +16,13 @@ public sealed class ExcelExportOptions<T>
     public bool FreezeHeader { get; set; } = true;
     public bool AutoFilter { get; set; } = true;
 
+    public ExcelExportOptions<T> UseTheme(IExcelTheme<T> theme)
+    {
+        if (theme is null) throw new ArgumentNullException(nameof(theme));
+        theme.Configure(this);
+        return this;
+    }
+
     public ExcelColumnStyleBuilder<T, TProperty> Column<TProperty>(Expression<Func<T, TProperty>> selector)
     {
         if (selector.Body is not MemberExpression member)

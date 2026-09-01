@@ -23,6 +23,15 @@ public sealed class ExcelMapper
             .CellsUsed()
             .ToDictionary(x => x.GetString(), x => x.Address.ColumnNumber, StringComparer.OrdinalIgnoreCase);
 
+        var missingRequired = map.Columns
+            .Where(x => x.Required && !headers.ContainsKey(x.Header))
+            .Select(x => x.Header)
+            .ToArray();
+
+        if (missingRequired.Length > 0)
+            throw new ExcelMappingException(
+                $"Required columns were not found in worksheet '{map.SheetName}': {string.Join(", ", missingRequired)}.");
+
         var result = new List<T>();
 
         foreach (var row in worksheet.RowsUsed().Skip(1))
@@ -38,7 +47,11 @@ public sealed class ExcelMapper
                     throw new ExcelMappingException(
                         $"Property mapped to '{column.Header}' is read-only and cannot be imported.");
 
-                var value = ExcelCellConverter.Read(row.Cell(columnNumber), column.ValueType);
+                var cell = row.Cell(columnNumber);
+                var value = column.Converter is null
+                    ? ExcelCellConverter.Read(cell, column.ValueType)
+                    : column.Converter.Read(ExcelCellConverter.ToExcelValue(cell), column.ValueType);
+
                 column.Setter(item!, value);
             }
 
@@ -89,7 +102,11 @@ public sealed class ExcelMapper
                 var column = map.Columns[i];
                 var cell = worksheet.Cell(rowNumber, i + 1);
                 var value = column.Getter(item!);
-                ExcelCellConverter.Write(cell, value);
+
+                if (column.Converter is null)
+                    ExcelCellConverter.Write(cell, value);
+                else
+                    ExcelCellConverter.Write(cell, column.Converter.Write(value));
 
                 foreach (var rule in rowRules)
                     ClosedXmlStyleApplier.Apply(cell.Style, rule.Style);

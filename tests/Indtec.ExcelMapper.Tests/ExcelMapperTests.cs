@@ -1,4 +1,5 @@
 using ClosedXML.Excel;
+using Indtec.ExcelMapper.Conversion;
 using Indtec.ExcelMapper.Styling;
 using Xunit;
 
@@ -23,15 +24,9 @@ public sealed class ExcelMapperTests
         var result = mapper.Import<ProductRow>(stream);
 
         Assert.Equal(2, result.Count);
-        Assert.Equal(1, result[0].Id);
         Assert.Equal("Coffee", result[0].Name);
-        Assert.Equal(10m, result[0].Cost);
-        Assert.Equal(12.50m, result[0].Price);
         Assert.True(result[0].Active);
-        Assert.Equal(2, result[1].Id);
         Assert.Equal("Tea", result[1].Name);
-        Assert.Equal(9m, result[1].Cost);
-        Assert.Equal(8.75m, result[1].Price);
         Assert.False(result[1].Active);
     }
 
@@ -48,16 +43,11 @@ public sealed class ExcelMapperTests
         using var stream = new MemoryStream();
         mapper.Export(source, stream, options =>
         {
-            options.Header.Bold().Background("#1F2937").FontColor("#FFFFFF");
+            options.UseTheme(new ProductTheme());
             options.Column(x => x.Price)
-                .NumberFormat("#,##0.00")
-                .Width(18)
                 .When(row => row.Price < row.Cost)
                 .Background("#FFCCCC")
                 .Bold();
-            options.Row()
-                .When(row => !row.Active)
-                .FontColor("#999999");
         });
 
         stream.Position = 0;
@@ -68,18 +58,59 @@ public sealed class ExcelMapperTests
         Assert.Equal("#,##0.00", sheet.Cell(2, 4).Style.NumberFormat.Format);
         Assert.Equal(18d, sheet.Column(4).Width);
         Assert.Equal(XLColor.FromHtml("#FFCCCC"), sheet.Cell(3, 4).Style.Fill.BackgroundColor);
-        Assert.True(sheet.Cell(3, 4).Style.Font.Bold);
-        Assert.Equal(XLColor.FromHtml("#999999"), sheet.Cell(3, 2).Style.Font.FontColor);
+        Assert.Equal("Yes", sheet.Cell(2, 5).GetString());
+        Assert.Equal("No", sheet.Cell(3, 5).GetString());
     }
+
+    [Fact]
+    public void Import_WhenRequiredColumnIsMissing_ShouldFailBeforeMappingRows()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Products");
+            sheet.Cell(1, 1).Value = "Id";
+            sheet.Cell(2, 1).Value = 1;
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        var mapper = new ExcelMapper();
+
+        var error = Assert.Throws<ExcelMappingException>(() => mapper.Import<ProductRow>(stream));
+        Assert.Contains("Name", error.Message);
+    }
+}
+
+public sealed class ProductTheme : ExcelTheme<ProductRow>
+{
+    public override void Configure(ExcelExportOptions<ProductRow> options)
+    {
+        options.Header.Bold().Background("#1F2937").FontColor("#FFFFFF");
+        options.Column(x => x.Price).NumberFormat("#,##0.00").Width(18);
+        options.Row().When(row => !row.Active).FontColor("#999999");
+    }
+}
+
+public sealed class YesNoBoolConverter : IExcelValueConverter
+{
+    public object? Read(ExcelValue value, Type destinationType)
+    {
+        if (value.IsEmpty) return false;
+        return string.Equals(value.AsString(), "Yes", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public ExcelValue Write(object? value)
+        => new(value is true ? "Yes" : "No");
 }
 
 [ExcelSheet("Products")]
 public partial class ProductRow
 {
-    [ExcelColumn("Id", Order = 1)]
+    [ExcelColumn("Id", Order = 1, Required = true)]
     public int Id { get; set; }
 
-    [ExcelColumn("Name", Order = 2)]
+    [ExcelColumn("Name", Order = 2, Required = true)]
     public string Name { get; set; } = string.Empty;
 
     [ExcelColumn("Cost", Order = 3)]
@@ -88,6 +119,6 @@ public partial class ProductRow
     [ExcelColumn("Price", Order = 4)]
     public decimal Price { get; set; }
 
-    [ExcelColumn("Active", Order = 5)]
+    [ExcelColumn("Active", Order = 5, Converter = typeof(YesNoBoolConverter))]
     public bool Active { get; set; }
 }

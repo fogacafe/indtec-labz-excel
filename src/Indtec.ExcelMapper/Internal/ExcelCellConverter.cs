@@ -1,10 +1,25 @@
 using System.Globalization;
 using ClosedXML.Excel;
+using Indtec.ExcelMapper.Conversion;
 
 namespace Indtec.ExcelMapper.Internal;
 
 internal static class ExcelCellConverter
 {
+    public static ExcelValue ToExcelValue(IXLCell cell)
+    {
+        if (cell.IsEmpty()) return new ExcelValue(null);
+
+        return cell.DataType switch
+        {
+            XLDataType.Boolean => new ExcelValue(cell.GetBoolean()),
+            XLDataType.Number => new ExcelValue(cell.GetDouble()),
+            XLDataType.DateTime => new ExcelValue(cell.GetDateTime()),
+            XLDataType.TimeSpan => new ExcelValue(cell.GetTimeSpan()),
+            _ => new ExcelValue(cell.GetString())
+        };
+    }
+
     public static object? Read(IXLCell cell, Type destinationType)
     {
         var targetType = Nullable.GetUnderlyingType(destinationType) ?? destinationType;
@@ -44,7 +59,12 @@ internal static class ExcelCellConverter
 
     public static void Write(IXLCell cell, object? value)
     {
-        switch (value)
+        Write(cell, new ExcelValue(value));
+    }
+
+    public static void Write(IXLCell cell, ExcelValue value)
+    {
+        switch (value.Value)
         {
             case null: cell.Clear(); break;
             case string x: cell.Value = x; break;
@@ -60,7 +80,7 @@ internal static class ExcelCellConverter
             case TimeSpan x: cell.Value = x; break;
             case Guid x: cell.Value = x.ToString(); break;
             case Enum x: cell.Value = x.ToString(); break;
-            default: cell.Value = value.ToString() ?? string.Empty; break;
+            default: cell.Value = value.Value.ToString() ?? string.Empty; break;
         }
     }
 }
