@@ -12,6 +12,8 @@ public sealed class ExcelMapper
 {
     private readonly IExcelMessageProvider _messages;
 
+    internal IExcelMessageProvider Messages => _messages;
+
     public ExcelMapper()
         : this(new ExcelMapperOptions())
     {
@@ -440,11 +442,11 @@ public sealed class ExcelMapper
         return headers;
     }
 
-    private static void ReadCell<T>(IXLRow row, int columnNumber, ExcelColumnMap column, T item)
+    private void ReadCell<T>(IXLRow row, int columnNumber, ExcelColumnMap column, T item)
     {
         var cell = row.Cell(columnNumber);
         var value = column.Converter is null
-            ? ExcelCellConverter.Read(cell, column.ValueType)
+            ? ExcelCellConverter.Read(cell, column.ValueType, _messages)
             : column.Converter.Read(ExcelCellConverter.ToExcelValue(cell), column.ValueType);
 
         column.Setter!(item!, value);
