@@ -88,7 +88,7 @@ internal sealed class RecordingBatchValidator : IExcelBatchValidator<ProductRow>
 {
     public ExcelBatchValidationContext<ProductRow>? Context { get; private set; }
 
-    public ValueTask<IReadOnlyList<ExcelImportError>> ValidateAsync(
+    public Task<IReadOnlyList<ExcelImportError>> ValidateAsync(
         ExcelBatchValidationContext<ProductRow> context,
         CancellationToken cancellationToken = default)
     {
@@ -99,6 +99,6 @@ internal sealed class RecordingBatchValidator : IExcelBatchValidator<ProductRow>
             new ExcelImportError(2, nameof(ProductRow.Id), "Rejected by external batch validation.")
         };
 
-        return new ValueTask<IReadOnlyList<ExcelImportError>>(errors);
+        return Task.FromResult(errors);
     }
 }
