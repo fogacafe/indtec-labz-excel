@@ -2,19 +2,19 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <PackageId>Indtec.ExcelMapper</PackageId>
-    <Version>1.0.1</Version>
+    <Version>1.1.0</Version>
     <Title>Indtec.ExcelMapper</Title>
     <Authors>fogacafe</Authors>
     <Company>Indtec</Company>
-    <Description>Source-generated Excel mapper for .NET with strongly typed import/export, reusable themes, custom converters, required columns and row-aware conditional styling.</Description>
-    <PackageTags>excel;xlsx;mapper;source-generator;roslyn;attributes;closedxml;styling;converter;nuget</PackageTags>
+    <Description>Source-generated Excel mapper for .NET with typed import validation, templates, dropdowns, themes, converters and row-aware styling.</Description>
+    <PackageTags>excel;xlsx;mapper;source-generator;roslyn;attributes;closedxml;styling;validation;template;converter;nuget</PackageTags>
     <PackageProjectUrl>https://github.com/fogacafe/indtec-labz-excel</PackageProjectUrl>
     <RepositoryUrl>https://github.com/fogacafe/indtec-labz-excel</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <PackageReleaseNotes>Documentation and package metadata polish. Release version is derived from the Git tag by the publishing workflow.</PackageReleaseNotes>
+    <PackageReleaseNotes>Adds typed import validation with collect/throw behavior, structured import errors, Excel template generation, allowed-value dropdowns and automatic enum dropdowns.</PackageReleaseNotes>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 

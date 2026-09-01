@@ -1,5 +1,6 @@
 using ClosedXML.Excel;
 using Indtec.ExcelMapper.Conversion;
+using Indtec.ExcelMapper.Importing;
 using Indtec.ExcelMapper.Styling;
 using Xunit;
 
@@ -80,6 +81,82 @@ public sealed class ExcelMapperTests
         var error = Assert.Throws<ExcelMappingException>(() => mapper.Import<ProductRow>(stream));
         Assert.Contains("Name", error.Message);
     }
+
+    [Fact]
+    public void Import_CollectMode_ShouldReturnValidItemsAndRowErrors()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Products");
+            sheet.Cell(1, 1).Value = "Id";
+            sheet.Cell(1, 2).Value = "Name";
+            sheet.Cell(1, 3).Value = "Cost";
+            sheet.Cell(1, 4).Value = "Price";
+            sheet.Cell(1, 5).Value = "Active";
+            sheet.Cell(1, 6).Value = "Status";
+
+            sheet.Cell(2, 1).Value = 1;
+            sheet.Cell(2, 2).Value = "Coffee";
+            sheet.Cell(2, 3).Value = 10;
+            sheet.Cell(2, 4).Value = 12;
+            sheet.Cell(2, 5).Value = "Yes";
+            sheet.Cell(2, 6).Value = "Active";
+
+            sheet.Cell(3, 1).Value = 2;
+            sheet.Cell(3, 2).Value = "Tea";
+            sheet.Cell(3, 3).Value = 10;
+            sheet.Cell(3, 4).Value = "not-a-price";
+            sheet.Cell(3, 5).Value = "No";
+            sheet.Cell(3, 6).Value = "Inactive";
+
+            sheet.Cell(4, 1).Value = 3;
+            sheet.Cell(4, 2).Value = "Milk";
+            sheet.Cell(4, 3).Value = 10;
+            sheet.Cell(4, 4).Value = 5;
+            sheet.Cell(4, 5).Value = "Yes";
+            sheet.Cell(4, 6).Value = "Active";
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        var mapper = new ExcelMapper();
+        var result = mapper.Import<ProductRow>(stream, options =>
+        {
+            options.ErrorBehavior = ExcelImportErrorBehavior.Collect;
+            options.Validate(row => row.Price >= row.Cost, "Price cannot be lower than cost.");
+        });
+
+        Assert.Single(result.Items);
+        Assert.Equal("Coffee", result.Items[0].Name);
+        Assert.Equal(2, result.Errors.Count);
+        Assert.Contains(result.Errors, error => error.Row == 3 && error.Column == "Price");
+        Assert.Contains(result.Errors, error => error.Row == 4 && error.Message.Contains("lower than cost"));
+    }
+
+    [Fact]
+    public void CreateTemplate_ShouldGenerateHeadersStylesAndDropdowns()
+    {
+        var mapper = new ExcelMapper();
+        using var stream = new MemoryStream();
+
+        mapper.CreateTemplate<ProductRow>(stream, options =>
+        {
+            options.UseTheme(new ProductTheme());
+            options.TemplateRows = 50;
+            options.Column(x => x.Name).AllowedValues("Coffee", "Tea", "Milk");
+        });
+
+        stream.Position = 0;
+        using var workbook = new XLWorkbook(stream);
+        var sheet = workbook.Worksheet("Products");
+
+        Assert.Equal("Id", sheet.Cell(1, 1).GetString());
+        Assert.Equal("Status", sheet.Cell(1, 6).GetString());
+        Assert.True(sheet.Cell(1, 1).Style.Font.Bold);
+        Assert.Equal(18d, sheet.Column(4).Width);
+        Assert.True(sheet.DataValidations.Any());
+    }
 }
 
 public sealed class ProductTheme : ExcelTheme<ProductRow>
@@ -104,6 +181,13 @@ public sealed class YesNoBoolConverter : IExcelValueConverter
         => new(value is true ? "Yes" : "No");
 }
 
+public enum ProductStatus
+{
+    Active,
+    Inactive,
+    Discontinued
+}
+
 [ExcelSheet("Products")]
 public partial class ProductRow
 {
@@ -121,4 +205,7 @@ public partial class ProductRow
 
     [ExcelColumn("Active", Order = 5, Converter = typeof(YesNoBoolConverter))]
     public bool Active { get; set; }
+
+    [ExcelColumn("Status", Order = 6)]
+    public ProductStatus Status { get; set; }
 }

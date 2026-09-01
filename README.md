@@ -5,7 +5,7 @@
 [![CI](https://github.com/fogacafe/indtec-labz-excel/actions/workflows/ci.yml/badge.svg)](https://github.com/fogacafe/indtec-labz-excel/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A source-generated Excel mapper for .NET: map strongly typed models to `.xlsx` files with attributes, import/export, custom converters, reusable themes and row-aware conditional styling.
+A source-generated Excel mapper for .NET: map strongly typed models to `.xlsx` files with attributes, import/export, validation, templates, custom converters, reusable themes and row-aware conditional styling.
 
 ```bash
 dotnet add package Indtec.ExcelMapper
@@ -13,7 +13,7 @@ dotnet add package Indtec.ExcelMapper
 
 ## Why
 
-Excel integrations tend to accumulate repetitive header lookup, conversion, styling and property-assignment code. `Indtec.ExcelMapper` keeps that mapping declarative while generating strongly typed accessors at compile time.
+Excel integrations tend to accumulate repetitive header lookup, conversion, validation, styling and property-assignment code. `Indtec.ExcelMapper` keeps that mapping declarative while generating strongly typed accessors at compile time.
 
 The runtime uses ClosedXML internally, but public models, converters and styling APIs do not expose ClosedXML types. The core mapping path does not scan properties with reflection or call `PropertyInfo.GetValue` / `PropertyInfo.SetValue` for every cell.
 
@@ -36,6 +36,16 @@ public partial class Product
 
     [ExcelColumn("Price", Order = 4)]
     public decimal Price { get; set; }
+
+    [ExcelColumn("Status", Order = 5)]
+    public ProductStatus Status { get; set; }
+}
+
+public enum ProductStatus
+{
+    Active,
+    Inactive,
+    Discontinued
 }
 ```
 
@@ -56,6 +66,52 @@ var products = mapper.Import<Product>(stream);
 ```
 
 Columns marked `Required = true` are validated before row mapping begins.
+
+## Import validation and error collection
+
+Use typed row rules when business validation needs values from more than one cell.
+
+```csharp
+using Indtec.ExcelMapper.Importing;
+
+var result = mapper.Import<Product>(stream, options =>
+{
+    options.ErrorBehavior = ExcelImportErrorBehavior.Collect;
+    options.Validate(
+        row => row.Price >= row.Cost,
+        "Price cannot be lower than cost.");
+});
+```
+
+`Collect` mode preserves valid rows and returns structured errors:
+
+```csharp
+foreach (var error in result.Errors)
+    Console.WriteLine($"Row {error.Row} | {error.Column} | {error.Message}");
+
+var validProducts = result.Items;
+```
+
+Use `ExcelImportErrorBehavior.Throw` when the first invalid row should fail the import immediately.
+
+## Excel templates
+
+Generate an empty workbook directly from the mapped model:
+
+```csharp
+mapper.CreateTemplate<Product>("products-template.xlsx", options =>
+{
+    options.UseTheme(new ProductTheme());
+    options.TemplateRows = 1000;
+
+    options.Column(x => x.Name)
+        .AllowedValues("Coffee", "Tea", "Milk");
+});
+```
+
+Templates reuse headers, themes, widths, number formats, freeze-header and auto-filter settings. Enum columns automatically receive a dropdown containing their enum values.
+
+`AllowedValues(...)` can be used for custom dropdowns such as status codes, currencies or business-domain options.
 
 ## Row-aware conditional styling
 
@@ -158,6 +214,10 @@ The package targets:
 
 - Source-generated sheet and column mapping.
 - Strongly typed import and export.
+- Structured import results with collect/throw behavior.
+- Typed cross-column row validation.
+- Excel template generation.
+- Custom dropdown values and automatic enum dropdowns.
 - Required-column validation.
 - Custom value converters.
 - Reusable typed themes.
