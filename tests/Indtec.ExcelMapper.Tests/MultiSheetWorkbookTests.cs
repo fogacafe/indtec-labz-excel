@@ -12,25 +12,25 @@ public sealed class MultiSheetWorkbookTests
         using var stream = new MemoryStream();
         using (var workbook = new XLWorkbook())
         {
-            var products = workbook.AddWorksheet("Products");
-            products.Cell(1, 1).Value = "Id";
-            products.Cell(1, 2).Value = "Name";
-            products.Cell(1, 3).Value = "Cost";
-            products.Cell(1, 4).Value = "Price";
-            products.Cell(1, 5).Value = "Active";
-            products.Cell(1, 6).Value = "Status";
-            products.Cell(2, 1).Value = 1;
-            products.Cell(2, 2).Value = "Coffee";
-            products.Cell(2, 3).Value = 10;
-            products.Cell(2, 4).Value = 12;
-            products.Cell(2, 5).Value = "Yes";
-            products.Cell(2, 6).Value = "Active";
+            var productsSheet = workbook.AddWorksheet("Products");
+            productsSheet.Cell(1, 1).Value = "Id";
+            productsSheet.Cell(1, 2).Value = "Name";
+            productsSheet.Cell(1, 3).Value = "Cost";
+            productsSheet.Cell(1, 4).Value = "Price";
+            productsSheet.Cell(1, 5).Value = "Active";
+            productsSheet.Cell(1, 6).Value = "Status";
+            productsSheet.Cell(2, 1).Value = 1;
+            productsSheet.Cell(2, 2).Value = "Coffee";
+            productsSheet.Cell(2, 3).Value = 10;
+            productsSheet.Cell(2, 4).Value = 12;
+            productsSheet.Cell(2, 5).Value = "Yes";
+            productsSheet.Cell(2, 6).Value = "Active";
 
-            var customers = workbook.AddWorksheet("Customers");
-            customers.Cell(1, 1).Value = "Id";
-            customers.Cell(1, 2).Value = "Name";
-            customers.Cell(2, 1).Value = 42;
-            customers.Cell(2, 2).Value = "Ada";
+            var customersSheet = workbook.AddWorksheet("Customers");
+            customersSheet.Cell(1, 1).Value = "Id";
+            customersSheet.Cell(1, 2).Value = "Name";
+            customersSheet.Cell(2, 1).Value = 42;
+            customersSheet.Cell(2, 2).Value = "Ada";
 
             workbook.SaveAs(stream);
         }
