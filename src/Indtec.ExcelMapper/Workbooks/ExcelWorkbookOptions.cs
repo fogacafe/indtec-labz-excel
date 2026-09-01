@@ -58,6 +58,7 @@ internal interface IExcelWorkbookImportRegistration
 {
     Type ModelType { get; }
     Task<object> ImportAsync(ExcelMapper mapper, XLWorkbook workbook, CancellationToken cancellationToken);
+    object AddValidationErrors(object result, IReadOnlyList<ExcelWorkbookValidationError> errors);
 }
 
 internal sealed class ExcelWorkbookImportRegistration<T> : IExcelWorkbookImportRegistration where T : new()
@@ -73,6 +74,35 @@ internal sealed class ExcelWorkbookImportRegistration<T> : IExcelWorkbookImportR
         XLWorkbook workbook,
         CancellationToken cancellationToken)
         => await mapper.ImportSheetAsync<T>(workbook, _options, cancellationToken).ConfigureAwait(false);
+
+    public object AddValidationErrors(object result, IReadOnlyList<ExcelWorkbookValidationError> errors)
+    {
+        if (result is not ExcelImportResult<T> typed)
+            throw new ExcelMappingException($"Unexpected workbook result for '{typeof(T).Name}'.");
+
+        if (errors.Count == 0)
+            return typed;
+
+        var added = errors
+            .Select(error => new ExcelImportError(error.Row, error.Column, error.Message))
+            .ToArray();
+
+        var allErrors = typed.Errors.Concat(added).ToArray();
+        var rows = typed.Rows
+            .Select(row => new ExcelImportRow<T>(
+                row.RowNumber,
+                row.Value,
+                allErrors.Where(error => error.Row == row.RowNumber).ToArray()))
+            .ToArray();
+
+        var invalidRows = new HashSet<int>(allErrors.Where(error => error.Row > 0).Select(error => error.Row));
+        var items = rows
+            .Where(row => !invalidRows.Contains(row.RowNumber))
+            .Select(row => row.Value)
+            .ToArray();
+
+        return new ExcelImportResult<T>(items, allErrors, rows);
+    }
 }
 
 internal interface IExcelWorkbookTemplateRegistration
