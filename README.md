@@ -8,7 +8,7 @@ Source-generated Excel mapper for .NET. Map strongly typed models to `.xlsx` fil
 
 Most Excel import/export code eventually turns into repetitive column lookup, conversion and property assignment. `Indtec.ExcelMapper` keeps the model declaration small while generating the mapping code at compile time.
 
-The runtime uses ClosedXML as an internal workbook engine. Models and generated mappings do not expose ClosedXML types.
+The runtime uses ClosedXML as an internal workbook engine. Models, generated mappings and styling rules do not expose ClosedXML types.
 
 ## Targets
 
@@ -30,8 +30,14 @@ public partial class Product
     [ExcelColumn("Product Name", Order = 2)]
     public string Name { get; set; } = string.Empty;
 
-    [ExcelColumn("Price", Order = 3)]
+    [ExcelColumn("Cost", Order = 3)]
+    public decimal Cost { get; set; }
+
+    [ExcelColumn("Price", Order = 4)]
     public decimal Price { get; set; }
+
+    [ExcelColumn("Active", Order = 5)]
+    public bool Active { get; set; }
 }
 ```
 
@@ -41,16 +47,37 @@ The mapped class must be `partial`. The generator adds a strongly typed map duri
 
 ```csharp
 var mapper = new ExcelMapper();
-
 mapper.Export(products, "products.xlsx");
 ```
 
-Or write to a stream:
+### Typed styling
+
+Styling receives the complete typed row, so a target cell can be styled using values from other mapped properties.
 
 ```csharp
-using var stream = new MemoryStream();
-mapper.Export(products, stream);
+mapper.Export(products, "products.xlsx", options =>
+{
+    options.Header
+        .Bold()
+        .Background("#1F2937")
+        .FontColor("#FFFFFF");
+
+    options.Column(x => x.Price)
+        .NumberFormat("#,##0.00")
+        .Width(18)
+        .When(row => row.Price < row.Cost)
+        .Background("#FFCCCC")
+        .Bold();
+
+    options.Row()
+        .When(row => !row.Active)
+        .FontColor("#999999");
+});
 ```
+
+Column conditional rules apply only to the selected cell. Row rules apply to every mapped cell in the matching row. Column conditional styling has the highest precedence after row and base-column styles.
+
+Headers are frozen and auto-filtered by default; both can be disabled through `ExcelExportOptions<T>`.
 
 ### Import
 
@@ -61,13 +88,11 @@ var products = mapper.Import<Product>(stream);
 
 ## How mapping works
 
-At compile time the source generator reads `ExcelSheet` and `ExcelColumn` metadata and emits strongly typed getters and setters for each mapped property. At runtime `ExcelMapper` consumes that generated map and uses ClosedXML only for workbook I/O.
+At compile time the source generator reads `ExcelSheet` and `ExcelColumn` metadata and emits strongly typed getters and setters for each mapped property. At runtime `ExcelMapper` consumes that generated map and uses ClosedXML only for workbook I/O and style application.
 
 That means the core mapping path does not scan properties with reflection and does not call `PropertyInfo.GetValue` / `PropertyInfo.SetValue` for every cell.
 
 ## Current scope
-
-The foundation currently covers:
 
 - Attribute-based sheet and column mapping.
 - Column ordering.
@@ -75,14 +100,16 @@ The foundation currently covers:
 - Import from streams.
 - Export to streams and paths.
 - Primitive, nullable, enum, date/time and GUID conversion groundwork.
+- Header, column and row styling metadata.
+- Typed cross-column conditional styling with `When(row => ...)`.
+- Number formats, widths, fonts, fills, borders, alignment and wrap text.
+- Freeze header and auto-filter options.
 - Multi-targeting (`netstandard2.0;net8.0`).
 - Tests, sample project and CI packing a NuGet artifact.
 
 ## Roadmap
 
-Next iterations will add the styling layer as metadata rather than ClosedXML behavior leaking into the public API, including themes, headers, number formats, widths, borders, alignment, freeze panes and conditional styling (`When(...)`).
-
-Further roadmap items include custom converters, diagnostics, required-column policies, richer import errors, source-generator tests, AOT/trimming validation and NuGet release automation.
+Further roadmap items include reusable themes, custom converters, richer style composition, diagnostics, required-column policies, richer import errors, source-generator tests, AOT/trimming validation and NuGet release automation.
 
 ## Repository structure
 

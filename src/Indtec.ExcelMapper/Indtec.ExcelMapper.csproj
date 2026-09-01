@@ -2,11 +2,11 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <PackageId>Indtec.ExcelMapper</PackageId>
-    <Version>0.1.0-alpha.1</Version>
+    <Version>0.1.0-alpha.2</Version>
     <Authors>fogacafe</Authors>
     <Company>Indtec</Company>
-    <Description>Source-generated Excel mapper for .NET with strongly typed import and export.</Description>
-    <PackageTags>excel xlsx mapper source-generator attributes closedxml</PackageTags>
+    <Description>Source-generated Excel mapper for .NET with strongly typed import, export and conditional styling.</Description>
+    <PackageTags>excel xlsx mapper source-generator attributes closedxml styling</PackageTags>
     <RepositoryUrl>https://github.com/fogacafe/indtec-labz-excel</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
