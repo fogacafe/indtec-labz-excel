@@ -1,4 +1,5 @@
 using ClosedXML.Excel;
+using Indtec.ExcelMapper.Importing;
 using Indtec.ExcelMapper.Internal;
 using Indtec.ExcelMapper.Mapping;
 using Indtec.ExcelMapper.Styling;
@@ -8,10 +9,18 @@ namespace Indtec.ExcelMapper;
 public sealed class ExcelMapper
 {
     public IReadOnlyList<T> Import<T>(Stream stream) where T : new()
+        => Import(stream, null).Items;
+
+    public ExcelImportResult<T> Import<T>(
+        Stream stream,
+        Action<ExcelImportOptions<T>>? configure) where T : new()
     {
         if (stream is null) throw new ArgumentNullException(nameof(stream));
 
         var map = GetMap<T>();
+        var options = new ExcelImportOptions<T>();
+        configure?.Invoke(options);
+
         using var workbook = new XLWorkbook(stream);
         var worksheet = workbook.Worksheets.FirstOrDefault(x =>
             x.Name.Equals(map.SheetName, StringComparison.OrdinalIgnoreCase));
@@ -32,11 +41,13 @@ public sealed class ExcelMapper
             throw new ExcelMappingException(
                 $"Required columns were not found in worksheet '{map.SheetName}': {string.Join(", ", missingRequired)}.");
 
-        var result = new List<T>();
+        var items = new List<T>();
+        var errors = new List<ExcelImportError>();
 
         foreach (var row in worksheet.RowsUsed().Skip(1))
         {
             var item = new T();
+            var rowHasMappingErrors = false;
 
             foreach (var column in map.Columns)
             {
@@ -47,18 +58,43 @@ public sealed class ExcelMapper
                     throw new ExcelMappingException(
                         $"Property mapped to '{column.Header}' is read-only and cannot be imported.");
 
-                var cell = row.Cell(columnNumber);
-                var value = column.Converter is null
-                    ? ExcelCellConverter.Read(cell, column.ValueType)
-                    : column.Converter.Read(ExcelCellConverter.ToExcelValue(cell), column.ValueType);
+                try
+                {
+                    var cell = row.Cell(columnNumber);
+                    var value = column.Converter is null
+                        ? ExcelCellConverter.Read(cell, column.ValueType)
+                        : column.Converter.Read(ExcelCellConverter.ToExcelValue(cell), column.ValueType);
 
-                column.Setter(item!, value);
+                    column.Setter(item!, value);
+                }
+                catch (Exception ex) when (options.ErrorBehavior == ExcelImportErrorBehavior.Collect)
+                {
+                    rowHasMappingErrors = true;
+                    errors.Add(new ExcelImportError(row.RowNumber(), column.Header, ex.Message));
+                }
             }
 
-            result.Add(item);
+            if (rowHasMappingErrors)
+                continue;
+
+            var validationErrors = options.Validators
+                .Where(rule => !rule.Predicate(item))
+                .Select(rule => new ExcelImportError(row.RowNumber(), null, rule.Message))
+                .ToArray();
+
+            if (validationErrors.Length > 0)
+            {
+                if (options.ErrorBehavior == ExcelImportErrorBehavior.Throw)
+                    throw new ExcelMappingException(validationErrors[0].ToString());
+
+                errors.AddRange(validationErrors);
+                continue;
+            }
+
+            items.Add(item);
         }
 
-        return result;
+        return new ExcelImportResult<T>(items, errors);
     }
 
     public void Export<T>(IEnumerable<T> items, Stream stream) where T : new()
@@ -79,18 +115,7 @@ public sealed class ExcelMapper
         using var workbook = new XLWorkbook();
         var worksheet = workbook.AddWorksheet(map.SheetName);
 
-        for (var i = 0; i < map.Columns.Count; i++)
-        {
-            var cell = worksheet.Cell(1, i + 1);
-            cell.Value = map.Columns[i].Header;
-            ClosedXmlStyleApplier.Apply(cell.Style, options.HeaderStyle);
-
-            if (options.Columns.TryGetValue(map.Columns[i].PropertyName, out var columnConfig) &&
-                columnConfig.Width.HasValue)
-            {
-                worksheet.Column(i + 1).Width = columnConfig.Width.Value;
-            }
-        }
+        WriteHeaders(worksheet, map, options);
 
         var rowNumber = 2;
         foreach (var item in items)
@@ -126,12 +151,7 @@ public sealed class ExcelMapper
             rowNumber++;
         }
 
-        if (options.FreezeHeader)
-            worksheet.SheetView.FreezeRows(1);
-
-        if (options.AutoFilter && worksheet.RangeUsed() is { } range)
-            range.SetAutoFilter();
-
+        FinishWorksheet(worksheet, options);
         workbook.SaveAs(stream);
     }
 
@@ -146,6 +166,108 @@ public sealed class ExcelMapper
         if (path is null) throw new ArgumentNullException(nameof(path));
         using var stream = File.Create(path);
         Export(items, stream, configure);
+    }
+
+    public void CreateTemplate<T>(Stream stream) where T : new()
+        => CreateTemplate<T>(stream, null);
+
+    public void CreateTemplate<T>(
+        Stream stream,
+        Action<ExcelExportOptions<T>>? configure) where T : new()
+    {
+        if (stream is null) throw new ArgumentNullException(nameof(stream));
+
+        var map = GetMap<T>();
+        var options = new ExcelExportOptions<T>();
+        configure?.Invoke(options);
+
+        if (options.TemplateRows < 1)
+            throw new ArgumentOutOfRangeException(nameof(options.TemplateRows), "TemplateRows must be greater than zero.");
+
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.AddWorksheet(map.SheetName);
+
+        WriteHeaders(worksheet, map, options);
+        ApplyTemplateValidations(worksheet, map, options);
+        FinishWorksheet(worksheet, options);
+        workbook.SaveAs(stream);
+    }
+
+    public void CreateTemplate<T>(string path) where T : new()
+        => CreateTemplate<T>(path, null);
+
+    public void CreateTemplate<T>(
+        string path,
+        Action<ExcelExportOptions<T>>? configure) where T : new()
+    {
+        if (path is null) throw new ArgumentNullException(nameof(path));
+        using var stream = File.Create(path);
+        CreateTemplate<T>(stream, configure);
+    }
+
+    private static void WriteHeaders<T>(
+        IXLWorksheet worksheet,
+        ExcelTypeMap map,
+        ExcelExportOptions<T> options)
+    {
+        for (var i = 0; i < map.Columns.Count; i++)
+        {
+            var cell = worksheet.Cell(1, i + 1);
+            cell.Value = map.Columns[i].Header;
+            ClosedXmlStyleApplier.Apply(cell.Style, options.HeaderStyle);
+
+            if (options.Columns.TryGetValue(map.Columns[i].PropertyName, out var columnConfig))
+            {
+                if (columnConfig.Width.HasValue)
+                    worksheet.Column(i + 1).Width = columnConfig.Width.Value;
+
+                ClosedXmlStyleApplier.Apply(worksheet.Column(i + 1).Style, columnConfig.Style);
+            }
+        }
+    }
+
+    private static void ApplyTemplateValidations<T>(
+        IXLWorksheet worksheet,
+        ExcelTypeMap map,
+        ExcelExportOptions<T> options)
+    {
+        for (var i = 0; i < map.Columns.Count; i++)
+        {
+            var column = map.Columns[i];
+            options.Columns.TryGetValue(column.PropertyName, out var config);
+
+            var values = config?.AllowedValues;
+            if (values is null)
+            {
+                var enumType = Nullable.GetUnderlyingType(column.ValueType) ?? column.ValueType;
+                if (enumType.IsEnum)
+                    values = Enum.GetNames(enumType);
+            }
+
+            if (values is null || values.Count == 0)
+                continue;
+
+            var formula = string.Join(",", values);
+            if (formula.Length > 255)
+                throw new ExcelMappingException(
+                    $"Allowed values for '{column.Header}' exceed Excel's 255-character inline validation limit.");
+
+            var range = worksheet.Range(2, i + 1, options.TemplateRows + 1, i + 1);
+            var validation = range.CreateDataValidation();
+            validation.List(formula, true);
+            validation.ErrorTitle = "Invalid value";
+            validation.ErrorMessage = $"Choose one of the allowed values for {column.Header}.";
+            validation.ShowErrorMessage = true;
+        }
+    }
+
+    private static void FinishWorksheet<T>(IXLWorksheet worksheet, ExcelExportOptions<T> options)
+    {
+        if (options.FreezeHeader)
+            worksheet.SheetView.FreezeRows(1);
+
+        if (options.AutoFilter && worksheet.RangeUsed() is { } range)
+            range.SetAutoFilter();
     }
 
     private static ExcelTypeMap GetMap<T>() where T : new()
