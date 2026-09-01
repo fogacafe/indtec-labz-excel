@@ -1,3 +1,5 @@
+using Xunit;
+
 namespace Indtec.ExcelMapper.Tests;
 
 public sealed class ExcelMapperTests
