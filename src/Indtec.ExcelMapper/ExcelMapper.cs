@@ -1,6 +1,7 @@
 using ClosedXML.Excel;
 using Indtec.ExcelMapper.Importing;
 using Indtec.ExcelMapper.Internal;
+using Indtec.ExcelMapper.Localization;
 using Indtec.ExcelMapper.Mapping;
 using Indtec.ExcelMapper.Styling;
 using Indtec.ExcelMapper.Workbooks;
@@ -9,6 +10,27 @@ namespace Indtec.ExcelMapper;
 
 public sealed class ExcelMapper
 {
+    private readonly IExcelMessageProvider _messages;
+
+    public ExcelMapper()
+        : this(new ExcelMapperOptions())
+    {
+    }
+
+    public ExcelMapper(ExcelMapperOptions options)
+    {
+        if (options is null) throw new ArgumentNullException(nameof(options));
+        _messages = options.ResolveMessages();
+    }
+
+    public ExcelMapper(Action<ExcelMapperOptions> configure)
+    {
+        if (configure is null) throw new ArgumentNullException(nameof(configure));
+        var options = new ExcelMapperOptions();
+        configure(options);
+        _messages = options.ResolveMessages();
+    }
+
     public IReadOnlyList<T> Import<T>(Stream stream) where T : new()
         => Import<T>(stream, null).Items;
 
@@ -23,8 +45,7 @@ public sealed class ExcelMapper
         configure?.Invoke(options);
 
         if (options.BatchValidators.Count > 0)
-            throw new ExcelMappingException(
-                "Batch validators require ImportAsync because they may perform asynchronous work.");
+            throw new ExcelMappingException(_messages.BatchValidatorsRequireAsync());
 
         using var workbook = new XLWorkbook(stream);
         var worksheet = GetWorksheet(workbook, map);
@@ -44,8 +65,7 @@ public sealed class ExcelMapper
                     continue;
 
                 if (column.Setter is null)
-                    throw new ExcelMappingException(
-                        $"Property mapped to '{column.Header}' is read-only and cannot be imported.");
+                    throw new ExcelMappingException(_messages.ReadOnlyProperty(column.Header));
 
                 try
                 {
@@ -107,15 +127,14 @@ public sealed class ExcelMapper
         configure(options);
 
         if (options.Sheets.Count == 0)
-            throw new ExcelMappingException("At least one sheet must be registered for workbook import.");
+            throw new ExcelMappingException(_messages.AtLeastOneSheetForImport());
 
         var duplicateModel = options.Sheets
             .GroupBy(x => x.ModelType)
             .FirstOrDefault(x => x.Count() > 1);
 
         if (duplicateModel is not null)
-            throw new ExcelMappingException(
-                $"Model '{duplicateModel.Key.Name}' was registered more than once in the workbook import.");
+            throw new ExcelMappingException(_messages.DuplicateWorkbookModel(duplicateModel.Key.Name));
 
         using var workbook = new XLWorkbook(stream);
         var results = new Dictionary<Type, object>();
@@ -140,8 +159,7 @@ public sealed class ExcelMapper
             foreach (var error in validatorErrors)
             {
                 if (!results.ContainsKey(error.ModelType))
-                    throw new ExcelMappingException(
-                        $"Workbook validator returned an error for unregistered model '{error.ModelType.Name}'.");
+                    throw new ExcelMappingException(_messages.UnregisteredWorkbookModel(error.ModelType.Name));
             }
 
             var firstThrowingError = validatorErrors.FirstOrDefault(error =>
@@ -193,8 +211,7 @@ public sealed class ExcelMapper
                     continue;
 
                 if (column.Setter is null)
-                    throw new ExcelMappingException(
-                        $"Property mapped to '{column.Header}' is read-only and cannot be imported.");
+                    throw new ExcelMappingException(_messages.ReadOnlyProperty(column.Header));
 
                 try
                 {
@@ -365,7 +382,7 @@ public sealed class ExcelMapper
         configure(options);
 
         if (options.Sheets.Count == 0)
-            throw new ExcelMappingException("At least one sheet must be registered for workbook template generation.");
+            throw new ExcelMappingException(_messages.AtLeastOneSheetForTemplate());
 
         using var workbook = new XLWorkbook();
         foreach (var sheet in options.Sheets)
@@ -386,11 +403,11 @@ public sealed class ExcelMapper
     internal void AddTemplateSheet<T>(XLWorkbook workbook, ExcelExportOptions<T> options) where T : new()
     {
         if (options.TemplateRows < 1)
-            throw new ArgumentOutOfRangeException(nameof(options.TemplateRows), "TemplateRows must be greater than zero.");
+            throw new ArgumentOutOfRangeException(nameof(options.TemplateRows), _messages.InvalidTemplateRows());
 
         var map = GetMap<T>();
         if (workbook.Worksheets.Any(x => x.Name.Equals(map.SheetName, StringComparison.OrdinalIgnoreCase)))
-            throw new ExcelMappingException($"Worksheet '{map.SheetName}' was registered more than once.");
+            throw new ExcelMappingException(_messages.DuplicateWorksheet(map.SheetName));
 
         var worksheet = workbook.AddWorksheet(map.SheetName);
         WriteHeaders(worksheet, map, options);
@@ -398,15 +415,15 @@ public sealed class ExcelMapper
         FinishWorksheet(worksheet, options);
     }
 
-    private static IXLWorksheet GetWorksheet(XLWorkbook workbook, ExcelTypeMap map)
+    private IXLWorksheet GetWorksheet(XLWorkbook workbook, ExcelTypeMap map)
     {
         var worksheet = workbook.Worksheets.FirstOrDefault(x =>
             x.Name.Equals(map.SheetName, StringComparison.OrdinalIgnoreCase));
 
-        return worksheet ?? throw new ExcelMappingException($"Worksheet '{map.SheetName}' was not found.");
+        return worksheet ?? throw new ExcelMappingException(_messages.WorksheetNotFound(map.SheetName));
     }
 
-    private static Dictionary<string, int> GetHeaders(IXLWorksheet worksheet, ExcelTypeMap map)
+    private Dictionary<string, int> GetHeaders(IXLWorksheet worksheet, ExcelTypeMap map)
     {
         var headers = worksheet.Row(1)
             .CellsUsed()
@@ -418,8 +435,7 @@ public sealed class ExcelMapper
             .ToArray();
 
         if (missingRequired.Length > 0)
-            throw new ExcelMappingException(
-                $"Required columns were not found in worksheet '{map.SheetName}': {string.Join(", ", missingRequired)}.");
+            throw new ExcelMappingException(_messages.RequiredColumnsNotFound(map.SheetName, missingRequired));
 
         return headers;
     }
@@ -455,7 +471,7 @@ public sealed class ExcelMapper
         }
     }
 
-    private static void ApplyTemplateValidations<T>(
+    private void ApplyTemplateValidations<T>(
         IXLWorksheet worksheet,
         ExcelTypeMap map,
         ExcelExportOptions<T> options)
@@ -478,14 +494,13 @@ public sealed class ExcelMapper
 
             var formula = string.Join(",", values);
             if (formula.Length > 255)
-                throw new ExcelMappingException(
-                    $"Allowed values for '{column.Header}' exceed Excel's 255-character inline validation limit.");
+                throw new ExcelMappingException(_messages.AllowedValuesTooLong(column.Header));
 
             var range = worksheet.Range(2, i + 1, options.TemplateRows + 1, i + 1);
             var validation = range.CreateDataValidation();
             validation.List(formula, true);
-            validation.ErrorTitle = "Invalid value";
-            validation.ErrorMessage = $"Choose one of the allowed values for {column.Header}.";
+            validation.ErrorTitle = _messages.InvalidValueTitle();
+            validation.ErrorMessage = _messages.InvalidAllowedValue(column.Header);
             validation.ShowErrorMessage = true;
         }
     }
