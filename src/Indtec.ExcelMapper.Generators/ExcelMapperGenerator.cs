@@ -107,6 +107,7 @@ public sealed class ExcelMapperGenerator : IIncrementalGenerator
         foreach (var column in model.Columns.OrderBy(x => x.Order).ThenBy(x => x.PropertyName, StringComparer.Ordinal))
         {
             source.Append("                new global::Indtec.ExcelMapper.Mapping.ExcelColumnMap(")
+                .Append(SymbolDisplay.FormatLiteral(column.PropertyName, true)).Append(", ")
                 .Append(SymbolDisplay.FormatLiteral(column.Header, true)).Append(", ")
                 .Append(column.Order).Append(", typeof(").Append(column.TypeName).Append("), ")
                 .Append("obj => ((").Append(model.FullyQualifiedName).Append(")obj).@").Append(column.PropertyName).Append(", ");
