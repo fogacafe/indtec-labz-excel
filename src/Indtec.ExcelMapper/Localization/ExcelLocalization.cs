@@ -25,10 +25,12 @@ public interface IExcelMessageProvider
     string ReadOnlyProperty(string header);
     string AtLeastOneSheetForImport();
     string DuplicateWorkbookModel(string modelName);
+    string UnregisteredWorkbookModel(string modelName);
     string AtLeastOneSheetForTemplate();
     string DuplicateWorksheet(string sheetName);
     string InvalidTemplateRows();
     string AllowedValuesTooLong(string header);
+    string InvalidValueTitle();
     string InvalidAllowedValue(string header);
 }
 
@@ -46,10 +48,12 @@ internal sealed class EnglishExcelMessageProvider : IExcelMessageProvider
     public string ReadOnlyProperty(string header) => $"Property mapped to '{header}' is read-only and cannot be imported.";
     public string AtLeastOneSheetForImport() => "At least one sheet must be registered for workbook import.";
     public string DuplicateWorkbookModel(string modelName) => $"Model '{modelName}' was registered more than once in the workbook import.";
+    public string UnregisteredWorkbookModel(string modelName) => $"Workbook validator returned an error for unregistered model '{modelName}'.";
     public string AtLeastOneSheetForTemplate() => "At least one sheet must be registered for workbook template generation.";
     public string DuplicateWorksheet(string sheetName) => $"Worksheet '{sheetName}' was registered more than once.";
     public string InvalidTemplateRows() => "TemplateRows must be greater than zero.";
     public string AllowedValuesTooLong(string header) => $"Allowed values for '{header}' exceed Excel's 255-character inline validation limit.";
+    public string InvalidValueTitle() => "Invalid value";
     public string InvalidAllowedValue(string header) => $"Choose one of the allowed values for {header}.";
 }
 
@@ -61,9 +65,11 @@ internal sealed class PortugueseBrazilExcelMessageProvider : IExcelMessageProvid
     public string ReadOnlyProperty(string header) => $"A propriedade mapeada para '{header}' é somente leitura e não pode ser importada.";
     public string AtLeastOneSheetForImport() => "Ao menos uma planilha deve ser registrada para importar o workbook.";
     public string DuplicateWorkbookModel(string modelName) => $"O modelo '{modelName}' foi registrado mais de uma vez na importação do workbook.";
+    public string UnregisteredWorkbookModel(string modelName) => $"O validador do workbook retornou um erro para o modelo não registrado '{modelName}'.";
     public string AtLeastOneSheetForTemplate() => "Ao menos uma planilha deve ser registrada para gerar o template do workbook.";
     public string DuplicateWorksheet(string sheetName) => $"A planilha '{sheetName}' foi registrada mais de uma vez.";
     public string InvalidTemplateRows() => "TemplateRows deve ser maior que zero.";
     public string AllowedValuesTooLong(string header) => $"Os valores permitidos para '{header}' excedem o limite de 255 caracteres da validação inline do Excel.";
+    public string InvalidValueTitle() => "Valor inválido";
     public string InvalidAllowedValue(string header) => $"Escolha um dos valores permitidos para {header}.";
 }
