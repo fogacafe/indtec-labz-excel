@@ -1,26 +1,23 @@
 # Indtec.ExcelMapper
 
-Source-generated Excel mapper for .NET. Map strongly typed models to `.xlsx` files with attributes, without runtime property discovery or `PropertyInfo.SetValue` in the mapping path.
+[![NuGet](https://img.shields.io/nuget/v/Indtec.ExcelMapper.svg)](https://www.nuget.org/packages/Indtec.ExcelMapper)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/Indtec.ExcelMapper.svg)](https://www.nuget.org/packages/Indtec.ExcelMapper)
+[![CI](https://github.com/fogacafe/indtec-labz-excel/actions/workflows/ci.yml/badge.svg)](https://github.com/fogacafe/indtec-labz-excel/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Why
-
-Most Excel import/export code eventually turns into repetitive column lookup, conversion, styling and property assignment. `Indtec.ExcelMapper` keeps the model declaration small while generating the mapping code at compile time.
-
-ClosedXML is an internal workbook engine. Models, generated mappings, converters and styling rules do not expose ClosedXML types.
-
-## Targets
-
-- `netstandard2.0` for broad compatibility.
-- `net8.0` as a modern target.
-- Source generator targeting `netstandard2.0`.
-
-## Installation
+A source-generated Excel mapper for .NET: map strongly typed models to `.xlsx` files with attributes, import/export, custom converters, reusable themes and row-aware conditional styling.
 
 ```bash
 dotnet add package Indtec.ExcelMapper
 ```
 
-## Mapping
+## Why
+
+Excel integrations tend to accumulate repetitive header lookup, conversion, styling and property-assignment code. `Indtec.ExcelMapper` keeps that mapping declarative while generating strongly typed accessors at compile time.
+
+The runtime uses ClosedXML internally, but public models, converters and styling APIs do not expose ClosedXML types. The core mapping path does not scan properties with reflection or call `PropertyInfo.GetValue` / `PropertyInfo.SetValue` for every cell.
+
+## Quick start
 
 ```csharp
 using Indtec.ExcelMapper;
@@ -39,33 +36,39 @@ public partial class Product
 
     [ExcelColumn("Price", Order = 4)]
     public decimal Price { get; set; }
-
-    [ExcelColumn("Active", Order = 5, Converter = typeof(YesNoBoolConverter))]
-    public bool Active { get; set; }
 }
 ```
 
-Mapped classes must be `partial`. The source generator emits strongly typed getters, setters and mapping metadata during compilation.
+Mapped classes are `partial` because the Roslyn incremental source generator emits the strongly typed mapping code during compilation.
 
-## Import and export
+### Export
 
 ```csharp
 var mapper = new ExcelMapper();
 mapper.Export(products, "products.xlsx");
-
-using var stream = File.OpenRead("products.xlsx");
-var imported = mapper.Import<Product>(stream);
 ```
 
-Columns marked `Required = true` are validated before rows are mapped.
+### Import
 
-## Typed row-aware styling
+```csharp
+using var stream = File.OpenRead("products.xlsx");
+var products = mapper.Import<Product>(stream);
+```
 
-Conditional styling receives the complete typed row, allowing one cell to react to values from other properties.
+Columns marked `Required = true` are validated before row mapping begins.
+
+## Row-aware conditional styling
+
+Rules receive the complete typed row, so the style of one cell can depend on another property without column indexes or string-based lookups.
 
 ```csharp
 mapper.Export(products, "products.xlsx", options =>
 {
+    options.Header
+        .Bold()
+        .Background("#1F2937")
+        .FontColor("#FFFFFF");
+
     options.Column(x => x.Price)
         .NumberFormat("#,##0.00")
         .Width(18)
@@ -74,12 +77,12 @@ mapper.Export(products, "products.xlsx", options =>
         .Bold();
 
     options.Row()
-        .When(row => !row.Active)
+        .When(row => row.Price <= 0)
         .FontColor("#999999");
 });
 ```
 
-Headers are frozen and auto-filtered by default.
+Headers are frozen and auto-filtered by default. Styling also supports fonts, fills, borders, alignment, wrapping, number formats and widths.
 
 ## Reusable themes
 
@@ -100,8 +103,6 @@ public sealed class ProductTheme : ExcelTheme<Product>
 }
 ```
 
-Use it anywhere:
-
 ```csharp
 mapper.Export(products, stream, options =>
     options.UseTheme(new ProductTheme()));
@@ -109,7 +110,7 @@ mapper.Export(products, stream, options =>
 
 ## Custom converters
 
-Converters work with `ExcelValue`, not ClosedXML types.
+Converters use the library-owned `ExcelValue` abstraction rather than ClosedXML types.
 
 ```csharp
 using Indtec.ExcelMapper.Conversion;
@@ -124,54 +125,55 @@ public sealed class YesNoBoolConverter : IExcelValueConverter
 }
 ```
 
-Attach it at compile time:
-
 ```csharp
 [ExcelColumn("Active", Converter = typeof(YesNoBoolConverter))]
 public bool Active { get; set; }
 ```
 
-## Architecture
+## How it works
 
 ```text
 Attributes
    ↓
 Roslyn incremental source generator
    ↓
-Strongly typed generated map
+Strongly typed generated mapping
    ↓
 ExcelMapper runtime
    ↓
 ClosedXML internal adapter
 ```
 
-The core mapping path does not scan properties with reflection and does not call `PropertyInfo.GetValue` / `PropertyInfo.SetValue` per cell.
+This keeps reflection out of the per-cell mapping path while preserving a small attribute-based API.
 
-## 1.0 scope
+## Compatibility
+
+The package targets:
+
+- `netstandard2.0` for broad .NET compatibility.
+- `net8.0` as a modern optimized target.
+- The source generator itself targets `netstandard2.0`.
+
+## Features
 
 - Source-generated sheet and column mapping.
+- Strongly typed import and export.
 - Required-column validation.
 - Custom value converters.
-- Strongly typed import/export.
 - Reusable typed themes.
 - Header, column and row styling.
-- Cross-column `When(row => ...)` rules.
+- Cross-column `When(row => ...)` conditional rules.
 - Number formats, widths, fonts, fills, borders, alignment and wrap text.
 - Freeze header and auto-filter.
-- `netstandard2.0` and `net8.0` targets.
-- CI build, test and NuGet packing.
+- CI-tested NuGet releases using GitHub OIDC Trusted Publishing.
 
-## Repository structure
+## Project history
 
-```text
-src/
-  Indtec.ExcelMapper/
-  Indtec.ExcelMapper.Generators/
-tests/
-  Indtec.ExcelMapper.Tests/
-samples/
-  Indtec.ExcelMapper.Sample/
-```
+`Indtec.ExcelMapper` is the redesigned successor to [`Codebrew.ExcelAnnotations`](https://github.com/fogacafe/Codebrew.ExcelAnnotations). The original package validated the annotation-based Excel mapping idea; this implementation rebuilds it around source generation, stronger typing and a cleaner public API.
+
+## Contributing
+
+Issues and pull requests are welcome. For behavior changes, adding or updating tests alongside the change is encouraged.
 
 ## License
 
