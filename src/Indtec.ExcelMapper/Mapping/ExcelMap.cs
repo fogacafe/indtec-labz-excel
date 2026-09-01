@@ -5,12 +5,14 @@ namespace Indtec.ExcelMapper.Mapping;
 public sealed class ExcelColumnMap
 {
     public ExcelColumnMap(
+        string propertyName,
         string header,
         int order,
         Type valueType,
         Func<object, object?> getter,
         Action<object, object?>? setter)
     {
+        PropertyName = propertyName;
         Header = header;
         Order = order;
         ValueType = valueType;
@@ -18,6 +20,7 @@ public sealed class ExcelColumnMap
         Setter = setter;
     }
 
+    public string PropertyName { get; }
     public string Header { get; }
     public int Order { get; }
     public Type ValueType { get; }
