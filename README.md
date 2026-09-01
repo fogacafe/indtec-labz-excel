@@ -5,7 +5,7 @@
 [![CI](https://github.com/fogacafe/indtec-labz-excel/actions/workflows/ci.yml/badge.svg)](https://github.com/fogacafe/indtec-labz-excel/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A source-generated Excel mapper for .NET: strongly typed `.xlsx` import/export, validation, multi-sheet workbooks, templates, custom converters, reusable themes and row-aware styling.
+A source-generated Excel mapper for .NET: strongly typed `.xlsx` import/export, validation, multi-sheet workbooks, templates, localized messages, styling and memory-bounded streaming imports for large worksheets.
 
 ```bash
 dotnet add package Indtec.ExcelMapper
@@ -15,7 +15,9 @@ dotnet add package Indtec.ExcelMapper
 
 Excel integrations tend to accumulate repetitive header lookup, conversion, validation, styling and property-assignment code. `Indtec.ExcelMapper` keeps that mapping declarative while generating strongly typed accessors at compile time.
 
-The runtime uses ClosedXML internally, but public models, converters, validators and styling APIs do not expose ClosedXML types. The core mapping path does not scan properties with reflection or call `PropertyInfo.GetValue` / `PropertyInfo.SetValue` for every cell.
+The regular import/export path uses ClosedXML internally. Public models, converters, validators and styling APIs do not expose ClosedXML types, and the core mapping path does not scan properties with reflection or call `PropertyInfo.GetValue` / `PropertyInfo.SetValue` for every cell.
+
+For large worksheet imports, a separate forward-only Open XML path reads rows incrementally and delivers bounded chunks without materializing the full worksheet in ClosedXML.
 
 ## Quick start
 
@@ -56,6 +58,14 @@ Mapped classes are `partial` because the Roslyn incremental source generator emi
 ```csharp
 var mapper = new ExcelMapper();
 mapper.Export(products, "products.xlsx");
+```
+
+All export APIs also accept a `Stream`, so `MemoryStream`, HTTP responses and cloud-storage workflows do not require temporary files:
+
+```csharp
+using var stream = new MemoryStream();
+mapper.Export(products, stream);
+stream.Position = 0;
 ```
 
 ### Import
@@ -108,7 +118,7 @@ Use `ExcelImportErrorBehavior.Throw` when the first invalid row should fail the 
 
 ## Async batch validation
 
-Use `IExcelBatchValidator<T>` when a validation needs the complete sheet, a batched service call, duplicate detection or any other asynchronous operation.
+Use `IExcelBatchValidator<T>` when a validation needs the complete sheet, a batched service call, duplicate detection or another asynchronous operation.
 
 ```csharp
 public sealed class CustomerBatchValidator : IExcelBatchValidator<Trade>
@@ -151,7 +161,48 @@ var result = await mapper.ImportAsync<Trade>(stream, options =>
 });
 ```
 
-Batch validators receive all parsed rows, including rows that already contain mapping or local-validation errors. Validators return new errors rather than mutating row state, so each validator can decide whether existing invalid rows should be ignored or inspected.
+Batch validators receive all parsed rows, including rows that already contain mapping or local-validation errors. Validators return new errors rather than mutating row state.
+
+## Large worksheets: streaming chunk import
+
+When a worksheet is too large to comfortably materialize as a full ClosedXML workbook, use `ImportChunksAsync<T>`. The streaming path uses `OpenXmlReader` and only keeps the current chunk of worksheet rows in memory.
+
+```csharp
+await mapper.ImportChunksAsync<Trade>(
+    stream,
+    async (chunk, cancellationToken) =>
+    {
+        await repository.SaveAsync(chunk.Items, cancellationToken);
+
+        foreach (var error in chunk.Errors)
+            logger.LogWarning("{Error}", error);
+    },
+    chunkSize: 1000,
+    configure: options =>
+    {
+        options.ErrorBehavior = ExcelImportErrorBehavior.Collect;
+        options.Validate(row => row.Price > 0, "Price must be positive.");
+    },
+    cancellationToken);
+```
+
+Each `ExcelImportChunk<T>` exposes:
+
+```csharp
+chunk.Index
+chunk.StartRow
+chunk.EndRow
+chunk.Items
+chunk.Rows
+chunk.Errors
+chunk.IsValid
+```
+
+After the callback returns, the mapper can release that chunk and continue reading the worksheet. This makes flows such as database persistence, queue publishing or external-service enrichment possible without accumulating all imported rows.
+
+The streaming API requires a readable, seekable `.xlsx` stream. It keeps the workbook shared-string table in memory because `.xlsx` files may reference it from any row, but it does not materialize the full worksheet DOM or retain previous chunks.
+
+`IExcelBatchValidator<T>` intentionally remains a full-sheet validator and is therefore rejected by `ImportChunksAsync<T>`. For chunk-scoped external validation, perform the batch operation inside the chunk callback. This avoids silently changing validator semantics.
 
 ## Multi-sheet workbook import
 
@@ -237,6 +288,53 @@ async batch validation
     ↓
 workbook / cross-sheet validation
 ```
+
+## Localization
+
+Processing messages are available in English (default) and Brazilian Portuguese.
+
+```csharp
+using Indtec.ExcelMapper.Localization;
+
+var mapper = new ExcelMapper(options =>
+    options.Language = ExcelLanguage.PortugueseBrazil);
+```
+
+This covers mapper-generated messages such as missing worksheets, required columns, cell conversions, workbook configuration and generated Excel validation prompts. Validation messages supplied by your own application remain exactly as you provide them.
+
+For custom wording or another language, override only the messages you need:
+
+```csharp
+public sealed class MyExcelMessages : ExcelMessageProvider
+{
+    public override string WorksheetNotFound(string sheetName)
+        => $"Não achei a aba {sheetName}.";
+}
+
+var mapper = new ExcelMapper(options =>
+    options.Messages = new MyExcelMessages());
+```
+
+You can also implement `IExcelMessageProvider` directly when you want complete control.
+
+## Excel display formats
+
+Excel stores numbers and dates as typed values, so formatting stays a presentation concern. Use custom masks with `NumberFormat(...)` / `DateFormat(...)` or one of the built-in common masks:
+
+```csharp
+using Indtec.ExcelMapper.Styling;
+
+mapper.Export(trades, stream, options =>
+{
+    options.Column(x => x.Price)
+        .NumberFormat(ExcelFormats.CurrencyBrazil);
+
+    options.Column(x => x.TradeDate)
+        .DateFormat(ExcelFormats.DateBrazil);
+});
+```
+
+Available helpers include Brazilian and ISO date/date-time masks, integer/decimal masks, percentage and BRL/USD currency masks.
 
 ## Excel templates
 
@@ -359,8 +457,8 @@ Roslyn incremental source generator
 Strongly typed generated mapping
    ↓
 ExcelMapper runtime
-   ↓
-ClosedXML internal adapter
+   ├── ClosedXML adapter (regular import/export/templates)
+   └── Open XML forward reader (streaming chunks)
 ```
 
 This keeps reflection out of the per-cell mapping path while preserving a small attribute-based API.
@@ -376,12 +474,15 @@ The package targets:
 ## Features
 
 - Source-generated sheet and column mapping.
-- Strongly typed import and export.
+- Strongly typed import and export to paths or streams.
 - Structured import results with collect/throw behavior.
 - Typed cross-column row validation.
 - Async batch validators with cancellation support.
+- Memory-bounded streaming chunk imports for large worksheets.
 - Multi-sheet workbook import with independent sheet configuration.
 - Workbook-level cross-sheet validation.
+- English and Brazilian Portuguese processing messages with custom overrides.
+- Common Excel display-format masks.
 - Excel template and multi-sheet workbook-template generation.
 - Custom dropdown values and automatic enum dropdowns.
 - Required-column validation.
