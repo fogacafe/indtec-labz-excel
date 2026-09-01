@@ -12,4 +12,6 @@ public sealed class ExcelColumnAttribute : Attribute
 
     public string Header { get; }
     public int Order { get; set; } = int.MaxValue;
+    public bool Required { get; set; }
+    public Type? Converter { get; set; }
 }
