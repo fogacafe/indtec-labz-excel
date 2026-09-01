@@ -9,6 +9,7 @@ public enum ExcelImportErrorBehavior
 public sealed class ExcelImportOptions<T>
 {
     internal List<ExcelRowValidationRule<T>> Validators { get; } = new();
+    internal List<IExcelBatchValidator<T>> BatchValidators { get; } = new();
 
     public ExcelImportErrorBehavior ErrorBehavior { get; set; } = ExcelImportErrorBehavior.Throw;
 
@@ -18,6 +19,13 @@ public sealed class ExcelImportOptions<T>
         if (string.IsNullOrWhiteSpace(message)) throw new ArgumentException("Validation message cannot be empty.", nameof(message));
 
         Validators.Add(new ExcelRowValidationRule<T>(predicate, message));
+        return this;
+    }
+
+    public ExcelImportOptions<T> AddBatchValidator(IExcelBatchValidator<T> validator)
+    {
+        if (validator is null) throw new ArgumentNullException(nameof(validator));
+        BatchValidators.Add(validator);
         return this;
     }
 }
