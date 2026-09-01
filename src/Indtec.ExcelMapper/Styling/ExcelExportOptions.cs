@@ -6,11 +6,13 @@ public sealed class ExcelExportOptions<T>
 {
     private readonly Dictionary<string, ExcelColumnStyleConfig<T>> _columns =
         new(StringComparer.Ordinal);
+    private readonly ExcelStyle _headerStyle = new();
 
     internal IReadOnlyDictionary<string, ExcelColumnStyleConfig<T>> Columns => _columns;
     internal List<ExcelConditionalStyleRule<T>> RowRules { get; } = new();
+    internal ExcelStyle HeaderStyle => _headerStyle;
 
-    public ExcelStyle Header { get; } = new();
+    public ExcelHeaderStyleBuilder Header => new(_headerStyle);
     public bool FreezeHeader { get; set; } = true;
     public bool AutoFilter { get; set; } = true;
 
@@ -44,10 +46,7 @@ internal sealed class ExcelColumnStyleConfig<T>
 
 internal sealed class ExcelConditionalStyleRule<T>
 {
-    public ExcelConditionalStyleRule(Func<T, bool> predicate)
-    {
-        Predicate = predicate;
-    }
+    public ExcelConditionalStyleRule(Func<T, bool> predicate) => Predicate = predicate;
 
     public Func<T, bool> Predicate { get; }
     public ExcelStyle Style { get; } = new();
@@ -70,6 +69,11 @@ public class ExcelStyleBuilder<TBuilder> where TBuilder : ExcelStyleBuilder<TBui
     public TBuilder Align(ExcelHorizontalAlignment alignment) { _style.HorizontalAlignment = alignment; return Self; }
     public TBuilder Wrap(bool value = true) { _style.WrapText = value; return Self; }
     public TBuilder Border(bool value = true) { _style.Border = value; return Self; }
+}
+
+public sealed class ExcelHeaderStyleBuilder : ExcelStyleBuilder<ExcelHeaderStyleBuilder>
+{
+    internal ExcelHeaderStyleBuilder(ExcelStyle style) : base(style) { }
 }
 
 public sealed class ExcelColumnStyleBuilder<T, TProperty> : ExcelStyleBuilder<ExcelColumnStyleBuilder<T, TProperty>>
