@@ -5,7 +5,7 @@
 [![CI](https://github.com/fogacafe/indtec-labz-excel/actions/workflows/ci.yml/badge.svg)](https://github.com/fogacafe/indtec-labz-excel/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A source-generated Excel mapper for .NET: map strongly typed models to `.xlsx` files with attributes, import/export, validation, templates, custom converters, reusable themes and row-aware conditional styling.
+A source-generated Excel mapper for .NET: strongly typed `.xlsx` import/export, validation, multi-sheet workbooks, templates, custom converters, reusable themes and row-aware styling.
 
 ```bash
 dotnet add package Indtec.ExcelMapper
@@ -15,7 +15,7 @@ dotnet add package Indtec.ExcelMapper
 
 Excel integrations tend to accumulate repetitive header lookup, conversion, validation, styling and property-assignment code. `Indtec.ExcelMapper` keeps that mapping declarative while generating strongly typed accessors at compile time.
 
-The runtime uses ClosedXML internally, but public models, converters and styling APIs do not expose ClosedXML types. The core mapping path does not scan properties with reflection or call `PropertyInfo.GetValue` / `PropertyInfo.SetValue` for every cell.
+The runtime uses ClosedXML internally, but public models, converters, validators and styling APIs do not expose ClosedXML types. The core mapping path does not scan properties with reflection or call `PropertyInfo.GetValue` / `PropertyInfo.SetValue` for every cell.
 
 ## Quick start
 
@@ -92,7 +92,151 @@ foreach (var error in result.Errors)
 var validProducts = result.Items;
 ```
 
+Async imports also expose every parsed row together with its current validation state:
+
+```csharp
+foreach (var row in result.Rows)
+{
+    Console.WriteLine($"Excel row {row.RowNumber}: {row.HasErrors}");
+
+    foreach (var error in row.Errors)
+        Console.WriteLine(error.Message);
+}
+```
+
 Use `ExcelImportErrorBehavior.Throw` when the first invalid row should fail the import immediately.
+
+## Async batch validation
+
+Use `IExcelBatchValidator<T>` when a validation needs the complete sheet, a batched service call, duplicate detection or any other asynchronous operation.
+
+```csharp
+public sealed class CustomerBatchValidator : IExcelBatchValidator<Trade>
+{
+    private readonly ICustomerService _service;
+
+    public CustomerBatchValidator(ICustomerService service)
+        => _service = service;
+
+    public async Task<IReadOnlyList<ExcelImportError>> ValidateAsync(
+        ExcelBatchValidationContext<Trade> context,
+        CancellationToken cancellationToken = default)
+    {
+        var ids = context.Rows
+            .Where(row => !row.HasErrors)
+            .Select(row => row.Value.CustomerId)
+            .Distinct()
+            .ToArray();
+
+        var validIds = await _service.GetValidIdsAsync(ids, cancellationToken);
+
+        return context.Rows
+            .Where(row => !row.HasErrors && !validIds.Contains(row.Value.CustomerId))
+            .Select(row => new ExcelImportError(
+                row.RowNumber,
+                nameof(Trade.CustomerId),
+                "Customer was not found."))
+            .ToArray();
+    }
+}
+```
+
+Register the validator explicitly; no dependency-injection integration is required by the library:
+
+```csharp
+var result = await mapper.ImportAsync<Trade>(stream, options =>
+{
+    options.ErrorBehavior = ExcelImportErrorBehavior.Collect;
+    options.AddBatchValidator(new CustomerBatchValidator(customerService));
+});
+```
+
+Batch validators receive all parsed rows, including rows that already contain mapping or local-validation errors. Validators return new errors rather than mutating row state, so each validator can decide whether existing invalid rows should be ignored or inspected.
+
+## Multi-sheet workbook import
+
+Import several mapped models while opening the workbook only once. Each sheet keeps its own import configuration and validators.
+
+```csharp
+var result = await mapper.ImportWorkbookAsync(stream, workbook =>
+{
+    workbook.Sheet<Trade>(options =>
+    {
+        options.ErrorBehavior = ExcelImportErrorBehavior.Collect;
+        options.Validate(row => row.Price > 0, "Price must be positive.");
+        options.AddBatchValidator(new TradeBatchValidator(service));
+    });
+
+    workbook.Sheet<Customer>(options =>
+        options.ErrorBehavior = ExcelImportErrorBehavior.Collect);
+});
+
+var trades = result.Sheet<Trade>();
+var customers = result.Sheet<Customer>();
+```
+
+The sheet name still comes from `[ExcelSheet]`; the workbook layer only orchestrates independent typed mappings.
+
+## Workbook-level validation
+
+Use `IExcelWorkbookValidator` when a rule depends on more than one sheet, such as validating references from `Trades.CustomerId` against `Customers.Id`.
+
+```csharp
+public sealed class TradeCustomerValidator : IExcelWorkbookValidator
+{
+    public Task<IReadOnlyList<ExcelWorkbookValidationError>> ValidateAsync(
+        ExcelWorkbookValidationContext context,
+        CancellationToken cancellationToken = default)
+    {
+        var customerIds = context
+            .Sheet<Customer>()
+            .Items
+            .Select(customer => customer.Id)
+            .ToHashSet();
+
+        IReadOnlyList<ExcelWorkbookValidationError> errors = context
+            .Sheet<Trade>()
+            .Rows
+            .Where(row => !row.HasErrors && !customerIds.Contains(row.Value.CustomerId))
+            .Select(row => ExcelWorkbookValidationError.For<Trade>(
+                row.RowNumber,
+                nameof(Trade.CustomerId),
+                "Customer was not found in Customers."))
+            .ToArray();
+
+        return Task.FromResult(errors);
+    }
+}
+```
+
+Register it at workbook level:
+
+```csharp
+var result = await mapper.ImportWorkbookAsync(stream, workbook =>
+{
+    workbook.Sheet<Trade>(options =>
+        options.ErrorBehavior = ExcelImportErrorBehavior.Collect);
+
+    workbook.Sheet<Customer>(options =>
+        options.ErrorBehavior = ExcelImportErrorBehavior.Collect);
+
+    workbook.AddValidator(new TradeCustomerValidator());
+});
+```
+
+Workbook validators see typed sheet results and existing row errors, return immutable validation errors, and those errors are routed back to the target sheet. The target sheet's `Collect` / `Throw` behavior is respected.
+
+The validation pipeline is intentionally layered:
+
+```text
+cell mapping
+    ↓
+local row validation
+    ↓
+async batch validation
+    ↓
+workbook / cross-sheet validation
+```
 
 ## Excel templates
 
@@ -112,6 +256,25 @@ mapper.CreateTemplate<Product>("products-template.xlsx", options =>
 Templates reuse headers, themes, widths, number formats, freeze-header and auto-filter settings. Enum columns automatically receive a dropdown containing their enum values.
 
 `AllowedValues(...)` can be used for custom dropdowns such as status codes, currencies or business-domain options.
+
+### Multi-sheet templates
+
+Generate a complete import workbook with independent configuration per sheet:
+
+```csharp
+mapper.CreateWorkbookTemplate("import-template.xlsx", workbook =>
+{
+    workbook.Sheet<Trade>(options =>
+    {
+        options.UseTheme(new TradeTheme());
+        options.Column(x => x.Currency)
+            .AllowedValues("BRL", "USD", "EUR");
+    });
+
+    workbook.Sheet<Customer>();
+    workbook.Sheet<Product>();
+});
+```
 
 ## Row-aware conditional styling
 
@@ -216,7 +379,10 @@ The package targets:
 - Strongly typed import and export.
 - Structured import results with collect/throw behavior.
 - Typed cross-column row validation.
-- Excel template generation.
+- Async batch validators with cancellation support.
+- Multi-sheet workbook import with independent sheet configuration.
+- Workbook-level cross-sheet validation.
+- Excel template and multi-sheet workbook-template generation.
 - Custom dropdown values and automatic enum dropdowns.
 - Required-column validation.
 - Custom value converters.
@@ -225,6 +391,7 @@ The package targets:
 - Cross-column `When(row => ...)` conditional rules.
 - Number formats, widths, fonts, fills, borders, alignment and wrap text.
 - Freeze header and auto-filter.
+- `netstandard2.0` + `net8.0` targets.
 - CI-tested NuGet releases using GitHub OIDC Trusted Publishing.
 
 ## Project history
