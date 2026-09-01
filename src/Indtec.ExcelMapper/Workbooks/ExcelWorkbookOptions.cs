@@ -57,6 +57,7 @@ public sealed class ExcelWorkbookImportResult
 internal interface IExcelWorkbookImportRegistration
 {
     Type ModelType { get; }
+    bool ShouldThrow { get; }
     Task<object> ImportAsync(ExcelMapper mapper, XLWorkbook workbook, CancellationToken cancellationToken);
     object AddValidationErrors(object result, IReadOnlyList<ExcelWorkbookValidationError> errors);
 }
@@ -68,6 +69,7 @@ internal sealed class ExcelWorkbookImportRegistration<T> : IExcelWorkbookImportR
     public ExcelWorkbookImportRegistration(ExcelImportOptions<T> options) => _options = options;
 
     public Type ModelType => typeof(T);
+    public bool ShouldThrow => _options.ErrorBehavior == ExcelImportErrorBehavior.Throw;
 
     public async Task<object> ImportAsync(
         ExcelMapper mapper,
