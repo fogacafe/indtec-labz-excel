@@ -10,8 +10,15 @@ internal static class ClosedXmlStyleApplier
         if (style.Bold.HasValue) target.Font.Bold = style.Bold.Value;
         if (style.Italic.HasValue) target.Font.Italic = style.Italic.Value;
         if (style.FontSize.HasValue) target.Font.FontSize = style.FontSize.Value;
-        if (!string.IsNullOrWhiteSpace(style.FontColor)) target.Font.FontColor = XLColor.FromHtml(style.FontColor);
-        if (!string.IsNullOrWhiteSpace(style.Background)) target.Fill.BackgroundColor = XLColor.FromHtml(style.Background);
+
+        var fontColor = style.FontColor;
+        if (!string.IsNullOrWhiteSpace(fontColor))
+            target.Font.FontColor = XLColor.FromHtml(fontColor!);
+
+        var background = style.Background;
+        if (!string.IsNullOrWhiteSpace(background))
+            target.Fill.BackgroundColor = XLColor.FromHtml(background!);
+
         if (!string.IsNullOrWhiteSpace(style.NumberFormat)) target.NumberFormat.Format = style.NumberFormat;
         if (style.WrapText.HasValue) target.Alignment.WrapText = style.WrapText.Value;
 
