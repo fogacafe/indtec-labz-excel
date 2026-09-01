@@ -8,7 +8,7 @@ public sealed class ExcelMapper
 {
     public IReadOnlyList<T> Import<T>(Stream stream) where T : new()
     {
-        ArgumentNullException.ThrowIfNull(stream);
+        if (stream is null) throw new ArgumentNullException(nameof(stream));
 
         var map = GetMap<T>();
         using var workbook = new XLWorkbook(stream);
@@ -49,8 +49,8 @@ public sealed class ExcelMapper
 
     public void Export<T>(IEnumerable<T> items, Stream stream) where T : new()
     {
-        ArgumentNullException.ThrowIfNull(items);
-        ArgumentNullException.ThrowIfNull(stream);
+        if (items is null) throw new ArgumentNullException(nameof(items));
+        if (stream is null) throw new ArgumentNullException(nameof(stream));
 
         var map = GetMap<T>();
         using var workbook = new XLWorkbook();
@@ -76,6 +76,7 @@ public sealed class ExcelMapper
 
     public void Export<T>(IEnumerable<T> items, string path) where T : new()
     {
+        if (path is null) throw new ArgumentNullException(nameof(path));
         using var stream = File.Create(path);
         Export(items, stream);
     }
