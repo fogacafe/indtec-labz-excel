@@ -21,39 +21,53 @@ internal static class ExcelCellConverter
     }
 
     public static object? Read(IXLCell cell, Type destinationType)
+        => Read(ToExcelValue(cell), destinationType, cell.Address.ToString());
+
+    public static object? Read(ExcelValue value, Type destinationType, string? address = null)
     {
         var targetType = Nullable.GetUnderlyingType(destinationType) ?? destinationType;
+        var source = value.Value;
+        var location = string.IsNullOrWhiteSpace(address) ? "cell" : $"cell {address}";
 
-        if (cell.IsEmpty())
+        if (source is null || source is string text && string.IsNullOrEmpty(text))
         {
             if (Nullable.GetUnderlyingType(destinationType) is not null || !destinationType.IsValueType)
                 return null;
 
-            throw new ExcelMappingException($"Cell {cell.Address} is empty but '{destinationType.Name}' is not nullable.");
+            throw new ExcelMappingException($"{location} is empty but '{destinationType.Name}' is not nullable.");
         }
 
         try
         {
-            if (targetType == typeof(string)) return cell.GetString();
-            if (targetType == typeof(bool)) return cell.GetValue<bool>();
-            if (targetType == typeof(byte)) return cell.GetValue<byte>();
-            if (targetType == typeof(short)) return cell.GetValue<short>();
-            if (targetType == typeof(int)) return cell.GetValue<int>();
-            if (targetType == typeof(long)) return cell.GetValue<long>();
-            if (targetType == typeof(float)) return cell.GetValue<float>();
-            if (targetType == typeof(double)) return cell.GetValue<double>();
-            if (targetType == typeof(decimal)) return cell.GetValue<decimal>();
-            if (targetType == typeof(DateTime)) return cell.GetValue<DateTime>();
-            if (targetType == typeof(TimeSpan)) return cell.GetValue<TimeSpan>();
-            if (targetType == typeof(Guid)) return Guid.Parse(cell.GetString());
-            if (targetType.IsEnum) return Enum.Parse(targetType, cell.GetString(), ignoreCase: true);
+            if (targetType == typeof(string))
+                return Convert.ToString(source, CultureInfo.InvariantCulture) ?? string.Empty;
 
-            return Convert.ChangeType(cell.GetString(), targetType, CultureInfo.InvariantCulture);
+            if (targetType == typeof(DateTime))
+            {
+                if (source is DateTime dateTime) return dateTime;
+                if (TryToDouble(source, out var serialDate)) return DateTime.FromOADate(serialDate);
+                return DateTime.Parse(Convert.ToString(source, CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture);
+            }
+
+            if (targetType == typeof(TimeSpan))
+            {
+                if (source is TimeSpan timeSpan) return timeSpan;
+                if (TryToDouble(source, out var serialTime)) return TimeSpan.FromDays(serialTime);
+                return TimeSpan.Parse(Convert.ToString(source, CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture);
+            }
+
+            if (targetType == typeof(Guid))
+                return Guid.Parse(Convert.ToString(source, CultureInfo.InvariantCulture)!);
+
+            if (targetType.IsEnum)
+                return Enum.Parse(targetType, Convert.ToString(source, CultureInfo.InvariantCulture)!, ignoreCase: true);
+
+            return Convert.ChangeType(source, targetType, CultureInfo.InvariantCulture);
         }
         catch (Exception ex) when (ex is not ExcelMappingException)
         {
             throw new ExcelMappingException(
-                $"Could not convert cell {cell.Address} to '{destinationType.Name}'.", ex);
+                $"Could not convert {location} to '{destinationType.Name}'.", ex);
         }
     }
 
@@ -81,6 +95,26 @@ internal static class ExcelCellConverter
             case Guid x: cell.Value = x.ToString(); break;
             case Enum x: cell.Value = x.ToString(); break;
             default: cell.Value = value.Value.ToString() ?? string.Empty; break;
+        }
+    }
+
+    private static bool TryToDouble(object source, out double value)
+    {
+        switch (source)
+        {
+            case double x: value = x; return true;
+            case float x: value = x; return true;
+            case decimal x: value = (double)x; return true;
+            case byte x: value = x; return true;
+            case short x: value = x; return true;
+            case int x: value = x; return true;
+            case long x: value = x; return true;
+            default:
+                return double.TryParse(
+                    Convert.ToString(source, CultureInfo.InvariantCulture),
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out value);
         }
     }
 }
