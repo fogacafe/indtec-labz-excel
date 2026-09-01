@@ -6,15 +6,15 @@
     <Title>Indtec.ExcelMapper</Title>
     <Authors>fogacafe</Authors>
     <Company>Indtec</Company>
-    <Description>Source-generated Excel mapper for .NET with typed import/export, async batch validation, multi-sheet workbooks, templates, themes and converters.</Description>
-    <PackageTags>excel;xlsx;mapper;source-generator;roslyn;attributes;closedxml;styling;validation;batch;workbook;multi-sheet;template;converter;nuget</PackageTags>
+    <Description>Source-generated Excel mapper for .NET with typed import/export, validation, multi-sheet workbooks, localized messages and memory-bounded streaming chunk imports.</Description>
+    <PackageTags>excel;xlsx;mapper;source-generator;roslyn;attributes;closedxml;openxml;streaming;chunks;localization;pt-br;styling;validation;batch;workbook;multi-sheet;template;converter;nuget</PackageTags>
     <PackageProjectUrl>https://github.com/fogacafe/indtec-labz-excel</PackageProjectUrl>
     <RepositoryUrl>https://github.com/fogacafe/indtec-labz-excel</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <PackageReleaseNotes>Adds async batch validation, imported row context, multi-sheet workbook import and template generation, plus workbook-level cross-sheet validation with immutable typed errors.</PackageReleaseNotes>
+    <PackageReleaseNotes>Adds English and pt-BR processing messages with custom overrides, reusable Excel format masks, and a forward-only Open XML chunk import path for large worksheets without materializing the full worksheet in ClosedXML.</PackageReleaseNotes>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 
