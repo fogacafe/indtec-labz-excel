@@ -9,7 +9,7 @@ namespace Indtec.ExcelMapper;
 public sealed class ExcelMapper
 {
     public IReadOnlyList<T> Import<T>(Stream stream) where T : new()
-        => Import(stream, null).Items;
+        => Import<T>(stream, null).Items;
 
     public ExcelImportResult<T> Import<T>(
         Stream stream,
