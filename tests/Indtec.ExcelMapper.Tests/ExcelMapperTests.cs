@@ -28,20 +28,20 @@ public sealed class ExcelMapperTests
         Assert.Equal(8.75m, result[1].Price);
         Assert.False(result[1].Active);
     }
+}
 
-    [ExcelSheet("Products")]
-    public partial class ProductRow
-    {
-        [ExcelColumn("Id", Order = 1)]
-        public int Id { get; set; }
+[ExcelSheet("Products")]
+public partial class ProductRow
+{
+    [ExcelColumn("Id", Order = 1)]
+    public int Id { get; set; }
 
-        [ExcelColumn("Name", Order = 2)]
-        public string Name { get; set; } = string.Empty;
+    [ExcelColumn("Name", Order = 2)]
+    public string Name { get; set; } = string.Empty;
 
-        [ExcelColumn("Price", Order = 3)]
-        public decimal Price { get; set; }
+    [ExcelColumn("Price", Order = 3)]
+    public decimal Price { get; set; }
 
-        [ExcelColumn("Active", Order = 4)]
-        public bool Active { get; set; }
-    }
+    [ExcelColumn("Active", Order = 4)]
+    public bool Active { get; set; }
 }
