@@ -7,12 +7,20 @@ namespace Indtec.ExcelMapper.Workbooks;
 public sealed class ExcelWorkbookImportOptions
 {
     internal List<IExcelWorkbookImportRegistration> Sheets { get; } = new();
+    internal List<IExcelWorkbookValidator> Validators { get; } = new();
 
     public ExcelWorkbookImportOptions Sheet<T>(Action<ExcelImportOptions<T>>? configure = null) where T : new()
     {
         var options = new ExcelImportOptions<T>();
         configure?.Invoke(options);
         Sheets.Add(new ExcelWorkbookImportRegistration<T>(options));
+        return this;
+    }
+
+    public ExcelWorkbookImportOptions AddValidator(IExcelWorkbookValidator validator)
+    {
+        if (validator is null) throw new ArgumentNullException(nameof(validator));
+        Validators.Add(validator);
         return this;
     }
 }
