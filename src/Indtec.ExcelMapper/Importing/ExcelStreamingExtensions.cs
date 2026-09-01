@@ -35,8 +35,10 @@ public static class ExcelStreamingExtensions
         using var document = SpreadsheetDocument.Open(stream, false);
         var workbookPart = document.WorkbookPart
             ?? throw new ExcelMappingException(mapper.Messages.WorksheetNotFound(map.SheetName));
+        var workbook = workbookPart.Workbook
+            ?? throw new ExcelMappingException(mapper.Messages.WorksheetNotFound(map.SheetName));
 
-        var sheet = workbookPart.Workbook.Sheets?
+        var sheet = workbook.Sheets?
             .Elements<Sheet>()
             .FirstOrDefault(x => string.Equals(x.Name?.Value, map.SheetName, StringComparison.OrdinalIgnoreCase));
 
@@ -59,7 +61,9 @@ public static class ExcelStreamingExtensions
             if (reader.ElementType != typeof(Row))
                 continue;
 
-            var row = (Row)reader.LoadCurrentElement();
+            if (reader.LoadCurrentElement() is not Row row)
+                continue;
+
             var rowNumber = checked((int)(row.RowIndex?.Value ?? 0U));
             if (rowNumber == 0)
                 continue;
@@ -67,7 +71,7 @@ public static class ExcelStreamingExtensions
             var cells = row.Elements<Cell>()
                 .Where(HasValue)
                 .ToDictionary(
-                    cell => GetColumnIndex(cell.CellReference?.Value),
+                    cell => GetColumnIndex(cell.CellReference?.Value, mapper),
                     cell => cell);
 
             if (rowNumber == 1)
@@ -182,14 +186,16 @@ public static class ExcelStreamingExtensions
         foreach (var pair in cells)
         {
             var header = ReadOpenXmlValue(pair.Value, sharedStrings).AsString();
-            if (!string.IsNullOrWhiteSpace(header))
-                headers[header] = pair.Key;
+            if (string.IsNullOrWhiteSpace(header))
+                continue;
+
+            headers[header!] = pair.Key;
         }
 
         return headers;
     }
 
-    private static void ValidateRequiredHeaders<T>(
+    private static void ValidateRequiredHeaders(
         ExcelTypeMap map,
         IReadOnlyDictionary<string, int> headers,
         ExcelMapper mapper)
@@ -253,13 +259,14 @@ public static class ExcelStreamingExtensions
     private static bool HasValue(Cell cell)
         => cell.CellValue is not null || cell.InlineString is not null;
 
-    private static int GetColumnIndex(string? reference)
+    private static int GetColumnIndex(string? reference, ExcelMapper mapper)
     {
         if (string.IsNullOrWhiteSpace(reference))
-            throw new ExcelMappingException("A streamed cell is missing its Excel reference.");
+            throw new ExcelMappingException(mapper.Messages.MissingCellReference());
 
+        var cellReference = reference!;
         var result = 0;
-        foreach (var character in reference)
+        foreach (var character in cellReference)
         {
             if (!char.IsLetter(character))
                 break;
@@ -268,7 +275,7 @@ public static class ExcelStreamingExtensions
         }
 
         if (result == 0)
-            throw new ExcelMappingException($"Invalid Excel cell reference '{reference}'.");
+            throw new ExcelMappingException(mapper.Messages.InvalidCellReference(cellReference));
 
         return result;
     }
