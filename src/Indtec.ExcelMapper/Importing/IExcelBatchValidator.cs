@@ -2,7 +2,7 @@ namespace Indtec.ExcelMapper.Importing;
 
 public interface IExcelBatchValidator<T>
 {
-    ValueTask<IReadOnlyList<ExcelImportError>> ValidateAsync(
+    Task<IReadOnlyList<ExcelImportError>> ValidateAsync(
         ExcelBatchValidationContext<T> context,
         CancellationToken cancellationToken = default);
 }
