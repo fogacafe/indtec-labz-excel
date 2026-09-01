@@ -1,6 +1,7 @@
 using System.Globalization;
 using ClosedXML.Excel;
 using Indtec.ExcelMapper.Conversion;
+using Indtec.ExcelMapper.Localization;
 
 namespace Indtec.ExcelMapper.Internal;
 
@@ -20,21 +21,29 @@ internal static class ExcelCellConverter
         };
     }
 
-    public static object? Read(IXLCell cell, Type destinationType)
-        => Read(ToExcelValue(cell), destinationType, cell.Address.ToString());
+    public static object? Read(
+        IXLCell cell,
+        Type destinationType,
+        IExcelMessageProvider? messages = null)
+        => Read(ToExcelValue(cell), destinationType, cell.Address.ToString(), messages);
 
-    public static object? Read(ExcelValue value, Type destinationType, string? address = null)
+    public static object? Read(
+        ExcelValue value,
+        Type destinationType,
+        string? address = null,
+        IExcelMessageProvider? messages = null)
     {
+        messages ??= ExcelMessages.English;
         var targetType = Nullable.GetUnderlyingType(destinationType) ?? destinationType;
         var source = value.Value;
-        var location = string.IsNullOrWhiteSpace(address) ? "cell" : $"cell {address}";
+        var location = string.IsNullOrWhiteSpace(address) ? "?" : address!;
 
         if (source is null || source is string text && string.IsNullOrEmpty(text))
         {
             if (Nullable.GetUnderlyingType(destinationType) is not null || !destinationType.IsValueType)
                 return null;
 
-            throw new ExcelMappingException($"{location} is empty but '{destinationType.Name}' is not nullable.");
+            throw new ExcelMappingException(messages.EmptyCellNotNullable(location, destinationType.Name));
         }
 
         try
@@ -67,7 +76,7 @@ internal static class ExcelCellConverter
         catch (Exception ex) when (ex is not ExcelMappingException)
         {
             throw new ExcelMappingException(
-                $"Could not convert {location} to '{destinationType.Name}'.", ex);
+                messages.CouldNotConvertCell(location, destinationType.Name), ex);
         }
     }
 
