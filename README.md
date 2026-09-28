@@ -68,6 +68,18 @@ mapper.Export(products, stream);
 stream.Position = 0;
 ```
 
+For multiple typed sheets in the same workbook, use `ExportWorkbook`. Each sheet keeps its own export configuration, converters, themes and styling:
+
+```csharp
+mapper.ExportWorkbook("report.xlsx", workbook =>
+{
+    workbook.Sheet(trades, options =>
+        options.AutoFitHeaders = true);
+
+    workbook.Sheet(customers);
+});
+```
+
 ### Import
 
 ```csharp
@@ -481,7 +493,7 @@ The package targets:
 ## Features
 
 - Source-generated sheet and column mapping.
-- Strongly typed import and export to paths or streams.
+- Strongly typed import and export to paths or streams, including multi-sheet workbook export.
 - Structured import results with collect/throw behavior.
 - Typed cross-column row validation.
 - Async batch validators with cancellation support.
