@@ -293,39 +293,7 @@ public sealed class ExcelMapper
 
         WriteHeaders(worksheet, map, options);
 
-        var rowNumber = 2;
-        foreach (var item in items)
-        {
-            var rowRules = options.RowRules.Where(x => x.Predicate(item)).ToArray();
-
-            for (var i = 0; i < map.Columns.Count; i++)
-            {
-                var column = map.Columns[i];
-                var cell = worksheet.Cell(rowNumber, i + 1);
-                var value = column.Getter(item!);
-
-                if (column.Converter is null)
-                    ExcelCellConverter.Write(cell, value);
-                else
-                    ExcelCellConverter.Write(cell, column.Converter.Write(value));
-
-                foreach (var rule in rowRules)
-                    ClosedXmlStyleApplier.Apply(cell.Style, rule.Style);
-
-                if (options.Columns.TryGetValue(column.PropertyName, out var columnConfig))
-                {
-                    ClosedXmlStyleApplier.Apply(cell.Style, columnConfig.Style);
-
-                    foreach (var rule in columnConfig.Rules)
-                    {
-                        if (rule.Predicate(item))
-                            ClosedXmlStyleApplier.Apply(cell.Style, rule.Style);
-                    }
-                }
-            }
-
-            rowNumber++;
-        }
+        WriteRows(worksheet, map, options, items);
 
         FinishWorksheet(worksheet, options);
         workbook.SaveAs(stream);
@@ -402,7 +370,10 @@ public sealed class ExcelMapper
         CreateWorkbookTemplate(stream, configure);
     }
 
-    internal void AddTemplateSheet<T>(XLWorkbook workbook, ExcelExportOptions<T> options) where T : new()
+    internal void AddTemplateSheet<T>(
+        XLWorkbook workbook,
+        ExcelExportOptions<T> options,
+        IReadOnlyList<T>? items = null) where T : new()
     {
         if (options.TemplateRows < 1)
             throw new ArgumentOutOfRangeException(nameof(options.TemplateRows), _messages.InvalidTemplateRows());
@@ -413,7 +384,17 @@ public sealed class ExcelMapper
 
         var worksheet = workbook.AddWorksheet(map.SheetName);
         WriteHeaders(worksheet, map, options);
-        ApplyTemplateValidations(worksheet, map, options);
+
+        if (items is { Count: > 0 })
+            WriteRows(worksheet, map, options, items);
+
+        ApplyTemplateValidations(
+            workbook,
+            worksheet,
+            map,
+            options,
+            Math.Max(options.TemplateRows, items?.Count ?? 0));
+
         FinishWorksheet(worksheet, options);
     }
 
@@ -467,17 +448,69 @@ public sealed class ExcelMapper
             {
                 if (columnConfig.Width.HasValue)
                     worksheet.Column(i + 1).Width = columnConfig.Width.Value;
+                else if (options.AutoFitHeaders)
+                    worksheet.Column(i + 1).AdjustToContents(1, 1);
 
                 ClosedXmlStyleApplier.Apply(worksheet.Column(i + 1).Style, columnConfig.Style);
+            }
+            else if (options.AutoFitHeaders)
+            {
+                worksheet.Column(i + 1).AdjustToContents(1, 1);
             }
         }
     }
 
-    private void ApplyTemplateValidations<T>(
+    private static void WriteRows<T>(
         IXLWorksheet worksheet,
         ExcelTypeMap map,
-        ExcelExportOptions<T> options)
+        ExcelExportOptions<T> options,
+        IEnumerable<T> items)
     {
+        var rowNumber = 2;
+        foreach (var item in items)
+        {
+            var rowRules = options.RowRules.Where(x => x.Predicate(item)).ToArray();
+
+            for (var i = 0; i < map.Columns.Count; i++)
+            {
+                var column = map.Columns[i];
+                var cell = worksheet.Cell(rowNumber, i + 1);
+                var value = column.Getter(item!);
+
+                if (column.Converter is null)
+                    ExcelCellConverter.Write(cell, value);
+                else
+                    ExcelCellConverter.Write(cell, column.Converter.Write(value));
+
+                foreach (var rule in rowRules)
+                    ClosedXmlStyleApplier.Apply(cell.Style, rule.Style);
+
+                if (options.Columns.TryGetValue(column.PropertyName, out var columnConfig))
+                {
+                    ClosedXmlStyleApplier.Apply(cell.Style, columnConfig.Style);
+
+                    foreach (var rule in columnConfig.Rules)
+                    {
+                        if (rule.Predicate(item))
+                            ClosedXmlStyleApplier.Apply(cell.Style, rule.Style);
+                    }
+                }
+            }
+
+            rowNumber++;
+        }
+    }
+
+    private void ApplyTemplateValidations<T>(
+        XLWorkbook workbook,
+        IXLWorksheet worksheet,
+        ExcelTypeMap map,
+        ExcelExportOptions<T> options,
+        int templateRows)
+    {
+        const string validationSheetName = "__IndtecValidation";
+        IXLWorksheet? validationSheet = null;
+
         for (var i = 0; i < map.Columns.Count; i++)
         {
             var column = map.Columns[i];
@@ -494,17 +527,28 @@ public sealed class ExcelMapper
             if (values is null || values.Count == 0)
                 continue;
 
-            var formula = string.Join(",", values);
-            if (formula.Length > 255)
-                throw new ExcelMappingException(_messages.AllowedValuesTooLong(column.Header));
+            validationSheet ??= workbook.Worksheets.FirstOrDefault(x =>
+                x.Name.Equals(validationSheetName, StringComparison.OrdinalIgnoreCase))
+                ?? workbook.AddWorksheet(validationSheetName);
 
-            var range = worksheet.Range(2, i + 1, options.TemplateRows + 1, i + 1);
-            var validation = range.CreateDataValidation();
-            validation.List(formula, true);
+            var validationColumn = (validationSheet.LastColumnUsed()?.ColumnNumber() ?? 0) + 1;
+            for (var valueIndex = 0; valueIndex < values.Count; valueIndex++)
+                validationSheet.Cell(valueIndex + 1, validationColumn).Value = values[valueIndex];
+
+            var valuesRange = validationSheet.Range(1, validationColumn, values.Count, validationColumn);
+            var rangeName = $"__IndtecValidation_{Guid.NewGuid():N}";
+            workbook.DefinedNames.Add(rangeName, valuesRange).Visible = false;
+
+            var targetRange = worksheet.Range(2, i + 1, templateRows + 1, i + 1);
+            var validation = targetRange.CreateDataValidation();
+            validation.List($"={rangeName}");
             validation.ErrorTitle = _messages.InvalidValueTitle();
             validation.ErrorMessage = _messages.InvalidAllowedValue(column.Header);
             validation.ShowErrorMessage = true;
         }
+
+        if (validationSheet is not null)
+            validationSheet.Visibility = XLWorksheetVisibility.VeryHidden;
     }
 
     private static void FinishWorksheet<T>(IXLWorksheet worksheet, ExcelExportOptions<T> options)

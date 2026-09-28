@@ -33,7 +33,19 @@ public sealed class ExcelWorkbookTemplateOptions
     {
         var options = new ExcelExportOptions<T>();
         configure?.Invoke(options);
-        Sheets.Add(new ExcelWorkbookTemplateRegistration<T>(options));
+        Sheets.Add(new ExcelWorkbookTemplateRegistration<T>(options, Array.Empty<T>()));
+        return this;
+    }
+
+    public ExcelWorkbookTemplateOptions Sheet<T>(
+        IEnumerable<T> items,
+        Action<ExcelExportOptions<T>>? configure = null) where T : new()
+    {
+        if (items is null) throw new ArgumentNullException(nameof(items));
+
+        var options = new ExcelExportOptions<T>();
+        configure?.Invoke(options);
+        Sheets.Add(new ExcelWorkbookTemplateRegistration<T>(options, items.ToArray()));
         return this;
     }
 }
@@ -115,9 +127,16 @@ internal interface IExcelWorkbookTemplateRegistration
 internal sealed class ExcelWorkbookTemplateRegistration<T> : IExcelWorkbookTemplateRegistration where T : new()
 {
     private readonly ExcelExportOptions<T> _options;
+    private readonly IReadOnlyList<T> _items;
 
-    public ExcelWorkbookTemplateRegistration(ExcelExportOptions<T> options) => _options = options;
+    public ExcelWorkbookTemplateRegistration(
+        ExcelExportOptions<T> options,
+        IReadOnlyList<T> items)
+    {
+        _options = options;
+        _items = items;
+    }
 
     public void AddSheet(ExcelMapper mapper, XLWorkbook workbook)
-        => mapper.AddTemplateSheet<T>(workbook, _options);
+        => mapper.AddTemplateSheet<T>(workbook, _options, _items);
 }

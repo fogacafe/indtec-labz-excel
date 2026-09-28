@@ -15,6 +15,7 @@ public sealed class ExcelExportOptions<T>
     public ExcelHeaderStyleBuilder Header => new(_headerStyle);
     public bool FreezeHeader { get; set; } = true;
     public bool AutoFilter { get; set; } = true;
+    public bool AutoFitHeaders { get; set; }
     public int TemplateRows { get; set; } = 1000;
 
     public ExcelExportOptions<T> UseTheme(IExcelTheme<T> theme)
