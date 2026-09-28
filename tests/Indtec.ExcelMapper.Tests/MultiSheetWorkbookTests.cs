@@ -82,11 +82,87 @@ public sealed class MultiSheetWorkbookTests
         stream.Position = 0;
         using var workbook = new XLWorkbook(stream);
 
-        Assert.Equal(2, workbook.Worksheets.Count);
+        Assert.Equal(2, workbook.Worksheets.Count(x => x.Visibility == XLWorksheetVisibility.Visible));
         Assert.Equal("Id", workbook.Worksheet("Products").Cell(1, 1).GetString());
         Assert.True(workbook.Worksheet("Products").DataValidations.Any());
         Assert.Equal("Name", workbook.Worksheet("Customers").Cell(1, 2).GetString());
         Assert.True(workbook.Worksheet("Customers").Cell(1, 1).Style.Font.Bold);
+    }
+
+    [Fact]
+    public void CreateWorkbookTemplate_ShouldPopulateInitialRowsAndAutoFitHeaders()
+    {
+        using var stream = new MemoryStream();
+        var mapper = new ExcelMapper();
+        var products = new[]
+        {
+            new ProductRow
+            {
+                Id = 1,
+                Name = "Coffee",
+                Cost = 10m,
+                Price = 12.5m,
+                Active = true,
+                Status = ProductStatus.Active
+            }
+        };
+
+        mapper.CreateWorkbookTemplate(stream, workbook =>
+        {
+            workbook.Sheet(products, options =>
+            {
+                options.AutoFitHeaders = true;
+                options.Column(x => x.Price).Width(30);
+            });
+
+            workbook.Sheet<CustomerRow>();
+        });
+
+        stream.Position = 0;
+        using var workbook = new XLWorkbook(stream);
+        var sheet = workbook.Worksheet("Products");
+
+        Assert.Equal("Coffee", sheet.Cell(2, 2).GetString());
+        Assert.Equal("Yes", sheet.Cell(2, 5).GetString());
+        Assert.True(sheet.Column(2).Width > 0);
+        Assert.Equal(30d, sheet.Column(4).Width);
+    }
+
+    [Fact]
+    public void CreateWorkbookTemplate_ShouldUseHiddenRangeForLongDataValidationLists()
+    {
+        using var stream = new MemoryStream();
+        var mapper = new ExcelMapper();
+        var values = Enumerable.Range(1, 40)
+            .Select(i => $"Allowed value {i:00} with enough text to exceed the inline Excel limit")
+            .ToArray();
+
+        Assert.True(string.Join(",", values).Length > 255);
+
+        mapper.CreateWorkbookTemplate(stream, workbook =>
+        {
+            workbook.Sheet<ProductRow>(options =>
+            {
+                options.TemplateRows = 25;
+                options.Column(x => x.Name).AllowedValues(values);
+            });
+
+            workbook.Sheet<CustomerRow>();
+        });
+
+        stream.Position = 0;
+        using var workbook = new XLWorkbook(stream);
+        var sheet = workbook.Worksheet("Products");
+        var validationSheet = workbook.Worksheet("__IndtecValidation");
+
+        Assert.Equal(XLWorksheetVisibility.VeryHidden, validationSheet.Visibility);
+        Assert.True(sheet.DataValidations.Any());
+
+        var validation = sheet.DataValidations.First();
+        Assert.Equal(XLAllowedValues.List, validation.AllowedValues);
+        Assert.StartsWith("=__IndtecValidation_", validation.Value);
+        Assert.Contains(values[0], validationSheet.CellsUsed().Select(x => x.GetString()));
+        Assert.Contains(values[^1], validationSheet.CellsUsed().Select(x => x.GetString()));
     }
 }
 
