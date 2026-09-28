@@ -362,9 +362,10 @@ Generate a complete import workbook with independent configuration per sheet:
 ```csharp
 mapper.CreateWorkbookTemplate("import-template.xlsx", workbook =>
 {
-    workbook.Sheet<Trade>(options =>
+    workbook.Sheet(trades, options =>
     {
         options.UseTheme(new TradeTheme());
+        options.AutoFitHeaders = true;
         options.Column(x => x.Currency)
             .AllowedValues("BRL", "USD", "EUR");
     });
@@ -373,6 +374,12 @@ mapper.CreateWorkbookTemplate("import-template.xlsx", workbook =>
     workbook.Sheet<Product>();
 });
 ```
+
+Pass an `IEnumerable<T>` to `Sheet(...)` when a template should start with populated rows. Initial rows use the same converters and styling pipeline as regular exports.
+
+`AutoFitHeaders` adjusts each non-explicit column width using only the header row. A column configured with `Width(...)` keeps its explicit width.
+
+Template dropdown values are stored in an internal very-hidden worksheet and referenced through workbook-defined names. This avoids Excel's 255-character limit for inline data-validation lists.
 
 ## Row-aware conditional styling
 
