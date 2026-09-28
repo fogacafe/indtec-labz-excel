@@ -164,6 +164,31 @@ public sealed class MultiSheetWorkbookTests
         Assert.Contains(values[0], validationSheet.CellsUsed().Select(x => x.GetString()));
         Assert.Contains(values[^1], validationSheet.CellsUsed().Select(x => x.GetString()));
     }
+    [Fact]
+    public void ExportWorkbook_ShouldExportMultipleTypedSheets()
+    {
+        using var stream = new MemoryStream();
+        var mapper = new ExcelMapper();
+
+        mapper.ExportWorkbook(stream, workbook =>
+        {
+            workbook.Sheet(
+                new[] { new ProductRow { Id = 1, Name = "Coffee", Price = 12.5m, Active = true } },
+                options => options.AutoFitHeaders = true);
+
+            workbook.Sheet(
+                new[] { new CustomerRow { Id = 7, Name = "Alice" } });
+        });
+
+        stream.Position = 0;
+        using var workbook = new XLWorkbook(stream);
+
+        Assert.Equal(2, workbook.Worksheets.Count);
+        Assert.Equal("Coffee", workbook.Worksheet("Products").Cell(2, 2).GetString());
+        Assert.Equal("Yes", workbook.Worksheet("Products").Cell(2, 5).GetString());
+        Assert.Equal("Alice", workbook.Worksheet("Customers").Cell(2, 2).GetString());
+    }
+
 }
 
 [ExcelSheet("Customers")]
