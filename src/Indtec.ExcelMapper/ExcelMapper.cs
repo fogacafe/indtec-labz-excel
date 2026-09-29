@@ -515,7 +515,7 @@ public sealed class ExcelMapper
         return false;
     }
 
-    private static string? GetValidationColumn<T>(ExcelTypeMap map, string? propertyName)
+    private static string? GetValidationColumn(ExcelTypeMap map, string? propertyName)
         => propertyName is null
             ? null
             : map.Columns.FirstOrDefault(x => x.PropertyName == propertyName)?.Header ?? propertyName;
