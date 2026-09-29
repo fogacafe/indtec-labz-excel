@@ -14,6 +14,8 @@ public abstract class ExcelMessageProvider : IExcelMessageProvider
     public virtual string MissingCellReference() => Fallback.MissingCellReference();
     public virtual string InvalidCellReference(string reference) => Fallback.InvalidCellReference(reference);
     public virtual string AtLeastOneSheetForImport() => Fallback.AtLeastOneSheetForImport();
+    public virtual string AtLeastOneSheetForExport() => Fallback.AtLeastOneSheetForExport();
+    public virtual string EmptyRow(int row) => Fallback.EmptyRow(row);
     public virtual string DuplicateWorkbookModel(string modelName) => Fallback.DuplicateWorkbookModel(modelName);
     public virtual string UnregisteredWorkbookModel(string modelName) => Fallback.UnregisteredWorkbookModel(modelName);
     public virtual string AtLeastOneSheetForTemplate() => Fallback.AtLeastOneSheetForTemplate();
