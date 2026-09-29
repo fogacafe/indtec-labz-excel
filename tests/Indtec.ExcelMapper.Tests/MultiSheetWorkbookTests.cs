@@ -234,6 +234,52 @@ public sealed class MultiSheetWorkbookTests
         Assert.Equal("Bob", workbook.Worksheet("Inactive Customers").Cell(2, 2).GetString());
     }
 
+    [Fact]
+    public async Task ImportWorkbookAsync_MissingRequiredSheet_ShouldThrow()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            workbook.AddWorksheet("Products");
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        await Assert.ThrowsAsync<ExcelMappingException>(() =>
+            new ExcelMapper().ImportWorkbookAsync(stream, workbook =>
+                workbook.Sheet<CustomerRow>()));
+    }
+
+    [Fact]
+    public void ExportWorkbook_DuplicateResolvedSheetNames_ShouldThrow()
+    {
+        using var stream = new MemoryStream();
+        var mapper = new ExcelMapper();
+
+        Assert.Throws<ExcelMappingException>(() =>
+            mapper.ExportWorkbook(stream, workbook =>
+            {
+                workbook.Sheet(new[] { new CustomerRow { Id = 1, Name = "Alice" } },
+                    options => options.SheetName = "People");
+                workbook.Sheet(new[] { new ProductRow { Id = 2, Name = "Coffee" } },
+                    options => options.SheetName = "people");
+            }));
+    }
+
+    [Fact]
+    public void CreateWorkbookTemplate_ShouldHonorSheetNameOverride()
+    {
+        using var stream = new MemoryStream();
+
+        new ExcelMapper().CreateWorkbookTemplate(stream, workbook =>
+            workbook.Sheet<CustomerRow>(options => options.SheetName = "People"));
+
+        stream.Position = 0;
+        using var workbook = new XLWorkbook(stream);
+        Assert.True(workbook.TryGetWorksheet("People", out _));
+        Assert.False(workbook.TryGetWorksheet("Customers", out _));
+    }
+
 }
 
 [ExcelSheet("Customers")]
