@@ -58,12 +58,26 @@ public sealed class ExcelMapper
 
         foreach (var row in worksheet.RowsUsed().Skip(1))
         {
+            if (IsMappedRowEmpty(row, headers, map))
+            {
+                if (options.EmptyRowBehavior == ExcelEmptyRowBehavior.Ignore)
+                    continue;
+                if (options.EmptyRowBehavior == ExcelEmptyRowBehavior.Error)
+                {
+                    var error = new ExcelImportError(row.RowNumber(), null, _messages.EmptyRow(row.RowNumber()));
+                    if (options.ErrorBehavior == ExcelImportErrorBehavior.Throw)
+                        throw new ExcelMappingException(error.ToString());
+                    errors.Add(error);
+                    continue;
+                }
+            }
+
             var item = new T();
             var rowHasMappingErrors = false;
 
             foreach (var column in map.Columns)
             {
-                if (!headers.TryGetValue(column.Header, out var columnNumber))
+                if (!TryGetColumnNumber(headers, column, out var columnNumber))
                     continue;
 
                 if (column.Setter is null)
@@ -85,7 +99,7 @@ public sealed class ExcelMapper
 
             var validationErrors = options.Validators
                 .Where(rule => !rule.Predicate(item))
-                .Select(rule => new ExcelImportError(row.RowNumber(), null, rule.Message))
+                .Select(rule => new ExcelImportError(row.RowNumber(), GetValidationColumn(map, rule.PropertyName), rule.Message))
                 .ToArray();
 
             if (validationErrors.Length > 0)
@@ -204,12 +218,22 @@ public sealed class ExcelMapper
             cancellationToken.ThrowIfCancellationRequested();
 
             var rowNumber = row.RowNumber();
+            if (IsMappedRowEmpty(row, headers, map))
+            {
+                if (options.EmptyRowBehavior == ExcelEmptyRowBehavior.Ignore)
+                    continue;
+                if (options.EmptyRowBehavior == ExcelEmptyRowBehavior.Error)
+                {
+                    errors.Add(new ExcelImportError(rowNumber, null, _messages.EmptyRow(rowNumber)));
+                    continue;
+                }
+            }
             var item = new T();
             var rowErrors = new List<ExcelImportError>();
 
             foreach (var column in map.Columns)
             {
-                if (!headers.TryGetValue(column.Header, out var columnNumber))
+                if (!TryGetColumnNumber(headers, column, out var columnNumber))
                     continue;
 
                 if (column.Setter is null)
@@ -229,7 +253,7 @@ public sealed class ExcelMapper
             {
                 rowErrors.AddRange(options.Validators
                     .Where(rule => !rule.Predicate(item))
-                    .Select(rule => new ExcelImportError(rowNumber, null, rule.Message)));
+                    .Select(rule => new ExcelImportError(rowNumber, GetValidationColumn(map, rule.PropertyName), rule.Message)));
             }
 
             parsedRows.Add((rowNumber, item));
@@ -289,7 +313,7 @@ public sealed class ExcelMapper
         configure?.Invoke(options);
 
         using var workbook = new XLWorkbook();
-        var worksheet = workbook.AddWorksheet(map.SheetName);
+        var worksheet = workbook.AddWorksheet(ResolveSheetName(map, options));
 
         WriteHeaders(worksheet, map, options);
 
@@ -323,7 +347,7 @@ public sealed class ExcelMapper
         configure(options);
 
         if (options.Sheets.Count == 0)
-            throw new ArgumentException("At least one sheet must be registered.", nameof(configure));
+            throw new ExcelMappingException(_messages.AtLeastOneSheetForExport());
 
         using var workbook = new XLWorkbook();
         foreach (var sheet in options.Sheets)
@@ -347,10 +371,11 @@ public sealed class ExcelMapper
         IEnumerable<T> items) where T : new()
     {
         var map = GetMap<T>();
-        if (workbook.Worksheets.Any(x => x.Name.Equals(map.SheetName, StringComparison.OrdinalIgnoreCase)))
-            throw new ExcelMappingException(_messages.DuplicateWorksheet(map.SheetName));
+        var sheetName = ResolveSheetName(map, options);
+        if (workbook.Worksheets.Any(x => x.Name.Equals(sheetName, StringComparison.OrdinalIgnoreCase)))
+            throw new ExcelMappingException(_messages.DuplicateWorksheet(sheetName));
 
-        var worksheet = workbook.AddWorksheet(map.SheetName);
+        var worksheet = workbook.AddWorksheet(sheetName);
         WriteHeaders(worksheet, map, options);
         WriteRows(worksheet, map, options, items);
         FinishWorksheet(worksheet, options);
@@ -423,10 +448,11 @@ public sealed class ExcelMapper
             throw new ArgumentOutOfRangeException(nameof(options.TemplateRows), _messages.InvalidTemplateRows());
 
         var map = GetMap<T>();
-        if (workbook.Worksheets.Any(x => x.Name.Equals(map.SheetName, StringComparison.OrdinalIgnoreCase)))
-            throw new ExcelMappingException(_messages.DuplicateWorksheet(map.SheetName));
+        var sheetName = ResolveSheetName(map, options);
+        if (workbook.Worksheets.Any(x => x.Name.Equals(sheetName, StringComparison.OrdinalIgnoreCase)))
+            throw new ExcelMappingException(_messages.DuplicateWorksheet(sheetName));
 
-        var worksheet = workbook.AddWorksheet(map.SheetName);
+        var worksheet = workbook.AddWorksheet(sheetName);
         WriteHeaders(worksheet, map, options);
 
         if (items is { Count: > 0 })
@@ -457,7 +483,7 @@ public sealed class ExcelMapper
             .ToDictionary(x => x.GetString(), x => x.Address.ColumnNumber, StringComparer.OrdinalIgnoreCase);
 
         var missingRequired = map.Columns
-            .Where(x => x.Required && !headers.ContainsKey(x.Header))
+            .Where(x => x.Required && !x.AcceptedHeaders().Any(headers.ContainsKey))
             .Select(x => x.Header)
             .ToArray();
 
@@ -466,6 +492,45 @@ public sealed class ExcelMapper
 
         return headers;
     }
+
+    internal bool WorksheetExists<T>(XLWorkbook workbook) where T : new()
+    {
+        var map = GetMap<T>();
+        return workbook.Worksheets.Any(x =>
+            x.Name.Equals(map.SheetName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool TryGetColumnNumber(
+        IReadOnlyDictionary<string, int> headers,
+        ExcelColumnMap column,
+        out int columnNumber)
+    {
+        foreach (var header in column.AcceptedHeaders())
+        {
+            if (headers.TryGetValue(header, out columnNumber))
+                return true;
+        }
+
+        columnNumber = 0;
+        return false;
+    }
+
+    private static string? GetValidationColumn<T>(ExcelTypeMap map, string? propertyName)
+        => propertyName is null
+            ? null
+            : map.Columns.FirstOrDefault(x => x.PropertyName == propertyName)?.Header ?? propertyName;
+
+    private static string ResolveSheetName<T>(ExcelTypeMap map, ExcelExportOptions<T> options)
+        => string.IsNullOrWhiteSpace(options.SheetName) ? map.SheetName : options.SheetName!;
+
+    private static bool IsMappedRowEmpty(
+        IXLRow row,
+        IReadOnlyDictionary<string, int> headers,
+        ExcelTypeMap map)
+        => map.Columns
+            .Select(column => TryGetColumnNumber(headers, column, out var number) ? number : 0)
+            .Where(number => number > 0)
+            .All(number => row.Cell(number).IsEmpty());
 
     private void ReadCell<T>(IXLRow row, int columnNumber, ExcelColumnMap column, T item)
     {
