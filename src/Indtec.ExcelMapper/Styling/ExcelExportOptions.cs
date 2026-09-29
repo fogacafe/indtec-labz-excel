@@ -13,6 +13,7 @@ public sealed class ExcelExportOptions<T>
     internal ExcelStyle HeaderStyle => _headerStyle;
 
     public ExcelHeaderStyleBuilder Header => new(_headerStyle);
+    public string? SheetName { get; set; }
     public bool FreezeHeader { get; set; } = true;
     public bool AutoFilter { get; set; } = true;
     public bool AutoFitHeaders { get; set; }
