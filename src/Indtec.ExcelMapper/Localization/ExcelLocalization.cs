@@ -29,6 +29,8 @@ public interface IExcelMessageProvider
     string MissingCellReference();
     string InvalidCellReference(string reference);
     string AtLeastOneSheetForImport();
+    string AtLeastOneSheetForExport();
+    string EmptyRow(int row);
     string DuplicateWorkbookModel(string modelName);
     string UnregisteredWorkbookModel(string modelName);
     string AtLeastOneSheetForTemplate();
