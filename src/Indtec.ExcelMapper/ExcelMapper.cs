@@ -56,7 +56,7 @@ public sealed class ExcelMapper
         var items = new List<T>();
         var errors = new List<ExcelImportError>();
 
-        foreach (var row in worksheet.RowsUsed().Skip(1))
+        foreach (var row in GetDataRows(worksheet, options.EmptyRowBehavior))
         {
             if (IsMappedRowEmpty(row, headers, map))
             {
@@ -522,6 +522,19 @@ public sealed class ExcelMapper
 
     private static string ResolveSheetName<T>(ExcelTypeMap map, ExcelExportOptions<T> options)
         => string.IsNullOrWhiteSpace(options.SheetName) ? map.SheetName : options.SheetName!;
+
+    private static IEnumerable<IXLRow> GetDataRows(
+        IXLWorksheet worksheet,
+        ExcelEmptyRowBehavior emptyRowBehavior)
+    {
+        if (emptyRowBehavior == ExcelEmptyRowBehavior.Ignore)
+            return worksheet.RowsUsed().Skip(1);
+
+        var lastRow = worksheet.LastRowUsed(XLCellsUsedOptions.All)?.RowNumber() ?? 1;
+        return lastRow <= 1
+            ? Enumerable.Empty<IXLRow>()
+            : worksheet.Rows(2, lastRow);
+    }
 
     private static bool IsMappedRowEmpty(
         IXLRow row,
