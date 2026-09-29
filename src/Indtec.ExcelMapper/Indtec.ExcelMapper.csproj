@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <PackageId>Indtec.ExcelMapper</PackageId>
-    <Version>1.4.0</Version>
+    <Version>1.5.0</Version>
     <Title>Indtec.ExcelMapper</Title>
     <Authors>fogacafe</Authors>
     <Company>Indtec</Company>
@@ -14,7 +14,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <PackageReleaseNotes>Adds populated multi-sheet workbook templates, header-only auto-fit, and robust dropdown validation through hidden named ranges without Excel's inline 255-character list limit.</PackageReleaseNotes>
+    <PackageReleaseNotes>Adds resilient imports with header aliases, column validation, empty-row policies, optional workbook sheets, and per-operation worksheet name overrides.</PackageReleaseNotes>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 
