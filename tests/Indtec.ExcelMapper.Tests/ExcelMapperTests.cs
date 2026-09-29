@@ -135,6 +135,57 @@ public sealed class ExcelMapperTests
     }
 
     [Fact]
+    public void Import_ShouldAcceptAliasesCaseInsensitiveOrderAndMissingOptionalColumns()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Products");
+            sheet.Cell(1, 1).Value = "PRODUCT NAME";
+            sheet.Cell(1, 2).Value = "id";
+            sheet.Cell(2, 1).Value = "Coffee";
+            sheet.Cell(2, 2).Value = 7;
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        var result = new ExcelMapper().Import<ProductRow>(stream);
+
+        Assert.Single(result);
+        Assert.Equal(7, result[0].Id);
+        Assert.Equal("Coffee", result[0].Name);
+        Assert.Equal(0m, result[0].Price);
+    }
+
+    [Fact]
+    public void Import_ColumnValidation_ShouldAssociateErrorWithMappedHeader()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Products");
+            sheet.Cell(1, 1).Value = "Id";
+            sheet.Cell(1, 2).Value = "Name";
+            sheet.Cell(1, 3).Value = "Price";
+            sheet.Cell(2, 1).Value = 1;
+            sheet.Cell(2, 2).Value = "Coffee";
+            sheet.Cell(2, 3).Value = -1;
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        var result = new ExcelMapper().Import<ProductRow>(stream, options =>
+        {
+            options.ErrorBehavior = ExcelImportErrorBehavior.Collect;
+            options.Column(x => x.Price).Validate(value => value >= 0, "Price cannot be negative.");
+        });
+
+        Assert.Empty(result.Items);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("Price", error.Column);
+    }
+
+    [Fact]
     public void CreateTemplate_ShouldGenerateHeadersStylesAndDropdowns()
     {
         var mapper = new ExcelMapper();
@@ -194,7 +245,7 @@ public partial class ProductRow
     [ExcelColumn("Id", Order = 1, Required = true)]
     public int Id { get; set; }
 
-    [ExcelColumn("Name", Order = 2, Required = true)]
+    [ExcelColumn("Name", Order = 2, Required = true, Aliases = new[] { "Product Name", "Description" })]
     public string Name { get; set; } = string.Empty;
 
     [ExcelColumn("Cost", Order = 3)]
