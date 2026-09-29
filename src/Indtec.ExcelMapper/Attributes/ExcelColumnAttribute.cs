@@ -26,6 +26,9 @@ public sealed class ExcelColumnAttribute : Attribute
     /// <summary>Gets or sets whether the column must exist when importing a worksheet.</summary>
     public bool Required { get; set; }
 
+    /// <summary>Gets or sets alternative header names accepted during import. Matching is case-insensitive.</summary>
+    public string[] Aliases { get; set; } = Array.Empty<string>();
+
     /// <summary>Gets or sets an optional <see cref="Conversion.IExcelValueConverter"/> implementation used for this property.</summary>
     public Type? Converter { get; set; }
 }
