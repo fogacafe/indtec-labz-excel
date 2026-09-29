@@ -312,6 +312,50 @@ public sealed class ExcelMapper
         Export(items, stream, configure);
     }
 
+    public void ExportWorkbook(
+        Stream stream,
+        Action<ExcelWorkbookExportOptions> configure)
+    {
+        if (stream is null) throw new ArgumentNullException(nameof(stream));
+        if (configure is null) throw new ArgumentNullException(nameof(configure));
+
+        var options = new ExcelWorkbookExportOptions();
+        configure(options);
+
+        if (options.Sheets.Count == 0)
+            throw new ArgumentException("At least one sheet must be registered.", nameof(configure));
+
+        using var workbook = new XLWorkbook();
+        foreach (var sheet in options.Sheets)
+            sheet.AddSheet(this, workbook);
+
+        workbook.SaveAs(stream);
+    }
+
+    public void ExportWorkbook(
+        string path,
+        Action<ExcelWorkbookExportOptions> configure)
+    {
+        if (path is null) throw new ArgumentNullException(nameof(path));
+        using var stream = File.Create(path);
+        ExportWorkbook(stream, configure);
+    }
+
+    internal void AddExportSheet<T>(
+        XLWorkbook workbook,
+        ExcelExportOptions<T> options,
+        IEnumerable<T> items) where T : new()
+    {
+        var map = GetMap<T>();
+        if (workbook.Worksheets.Any(x => x.Name.Equals(map.SheetName, StringComparison.OrdinalIgnoreCase)))
+            throw new ExcelMappingException(_messages.DuplicateWorksheet(map.SheetName));
+
+        var worksheet = workbook.AddWorksheet(map.SheetName);
+        WriteHeaders(worksheet, map, options);
+        WriteRows(worksheet, map, options, items);
+        FinishWorksheet(worksheet, options);
+    }
+
     public void CreateTemplate<T>(Stream stream) where T : new()
         => CreateTemplate<T>(stream, null);
 
