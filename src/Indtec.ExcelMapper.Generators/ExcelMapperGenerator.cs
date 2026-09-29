@@ -42,6 +42,7 @@ public sealed class ExcelMapperGenerator : IIncrementalGenerator
             var order = int.MaxValue;
             var required = false;
             string? converterType = null;
+            var aliases = new List<string>();
 
             foreach (var namedArgument in attribute.NamedArguments)
             {
@@ -49,6 +50,12 @@ public sealed class ExcelMapperGenerator : IIncrementalGenerator
                 if (namedArgument.Key == "Required" && namedArgument.Value.Value is bool requiredValue) required = requiredValue;
                 if (namedArgument.Key == "Converter" && namedArgument.Value.Value is INamedTypeSymbol converter)
                     converterType = converter.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                if (namedArgument.Key == "Aliases")
+                {
+                    aliases.AddRange(namedArgument.Value.Values
+                        .Select(x => x.Value as string)
+                        .Where(x => !string.IsNullOrWhiteSpace(x))!);
+                }
             }
 
             columns.Add(new ColumnInfo(
@@ -58,7 +65,8 @@ public sealed class ExcelMapperGenerator : IIncrementalGenerator
                 order,
                 property.SetMethod is not null && !property.SetMethod.IsInitOnly,
                 required,
-                converterType));
+                converterType,
+                aliases));
         }
 
         return new ModelInfo(
@@ -115,7 +123,9 @@ public sealed class ExcelMapperGenerator : IIncrementalGenerator
 
             source.Append(", ").Append(column.Required ? "true" : "false").Append(", ");
             source.Append(column.ConverterType is null ? "null" : "new " + column.ConverterType + "()");
-            source.AppendLine("),");
+            source.Append(", new string[] { ");
+            source.Append(string.Join(", ", column.Aliases.Select(x => SymbolDisplay.FormatLiteral(x, true))));
+            source.AppendLine(" }),");
         }
 
         source.AppendLine("            });");
@@ -140,8 +150,8 @@ public sealed class ExcelMapperGenerator : IIncrementalGenerator
 
     private sealed class ColumnInfo
     {
-        public ColumnInfo(string propertyName, string typeName, string header, int order, bool canWrite, bool required, string? converterType)
-        { PropertyName = propertyName; TypeName = typeName; Header = header; Order = order; CanWrite = canWrite; Required = required; ConverterType = converterType; }
+        public ColumnInfo(string propertyName, string typeName, string header, int order, bool canWrite, bool required, string? converterType, IReadOnlyList<string> aliases)
+        { PropertyName = propertyName; TypeName = typeName; Header = header; Order = order; CanWrite = canWrite; Required = required; ConverterType = converterType; Aliases = aliases; }
         public string PropertyName { get; }
         public string TypeName { get; }
         public string Header { get; }
@@ -149,5 +159,6 @@ public sealed class ExcelMapperGenerator : IIncrementalGenerator
         public bool CanWrite { get; }
         public bool Required { get; }
         public string? ConverterType { get; }
+        public IReadOnlyList<string> Aliases { get; }
     }
 }
