@@ -113,6 +113,47 @@ public sealed class StreamingChunkImportTests
     }
 
     [Fact]
+    public async Task ImportChunksAsync_ShouldMatchAliasCaseInsensitiveAndReportColumnValidation()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("StreamingRows");
+            sheet.Cell(1, 1).Value = "TradeDate";
+            sheet.Cell(1, 2).Value = "amount";
+            sheet.Cell(1, 3).Value = "description";
+            sheet.Cell(1, 4).Value = "ID";
+            sheet.Cell(2, 1).Value = new DateTime(2026, 9, 1);
+            sheet.Cell(2, 2).Value = -1;
+            sheet.Cell(2, 3).Value = "Coffee";
+            sheet.Cell(2, 4).Value = 7;
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        ExcelImportChunk<StreamingRow>? captured = null;
+
+        await new ExcelMapper().ImportChunksAsync<StreamingRow>(
+            stream,
+            (chunk, _) =>
+            {
+                captured = chunk;
+                return Task.CompletedTask;
+            },
+            configure: options =>
+            {
+                options.ErrorBehavior = ExcelImportErrorBehavior.Collect;
+                options.Column(x => x.Amount).Validate(value => value >= 0, "Amount must be positive.");
+            });
+
+        Assert.NotNull(captured);
+        Assert.Empty(captured!.Items);
+        var error = Assert.Single(captured.Errors);
+        Assert.Equal("Amount", error.Column);
+        Assert.Equal(2, error.Row);
+    }
+
+    [Fact]
     public async Task ImportChunksAsync_ShouldRejectFullSheetBatchValidators()
     {
         using var stream = new MemoryStream();
@@ -153,7 +194,7 @@ public partial class StreamingRow
     [ExcelColumn("Id", Order = 1, Required = true)]
     public int Id { get; set; }
 
-    [ExcelColumn("Name", Order = 2, Required = true)]
+    [ExcelColumn("Name", Order = 2, Required = true, Aliases = new[] { "Description" })]
     public string Name { get; set; } = string.Empty;
 
     [ExcelColumn("Amount", Order = 3, Required = true)]

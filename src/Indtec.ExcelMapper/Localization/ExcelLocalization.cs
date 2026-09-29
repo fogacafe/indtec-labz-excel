@@ -29,6 +29,8 @@ public interface IExcelMessageProvider
     string MissingCellReference();
     string InvalidCellReference(string reference);
     string AtLeastOneSheetForImport();
+    string AtLeastOneSheetForExport();
+    string EmptyRow(int row);
     string DuplicateWorkbookModel(string modelName);
     string UnregisteredWorkbookModel(string modelName);
     string AtLeastOneSheetForTemplate();
@@ -57,6 +59,8 @@ internal sealed class EnglishExcelMessageProvider : IExcelMessageProvider
     public string MissingCellReference() => "A streamed cell is missing its Excel reference.";
     public string InvalidCellReference(string reference) => $"Invalid Excel cell reference '{reference}'.";
     public string AtLeastOneSheetForImport() => "At least one sheet must be registered for workbook import.";
+    public string AtLeastOneSheetForExport() => "At least one sheet must be registered for workbook export.";
+    public string EmptyRow(int row) => $"Row {row} is empty.";
     public string DuplicateWorkbookModel(string modelName) => $"Model '{modelName}' was registered more than once in the workbook import.";
     public string UnregisteredWorkbookModel(string modelName) => $"Workbook validator returned an error for unregistered model '{modelName}'.";
     public string AtLeastOneSheetForTemplate() => "At least one sheet must be registered for workbook template generation.";
@@ -79,6 +83,8 @@ internal sealed class PortugueseBrazilExcelMessageProvider : IExcelMessageProvid
     public string MissingCellReference() => "Uma célula lida em streaming não possui referência do Excel.";
     public string InvalidCellReference(string reference) => $"A referência de célula do Excel '{reference}' é inválida.";
     public string AtLeastOneSheetForImport() => "Ao menos uma planilha deve ser registrada para importar o workbook.";
+    public string AtLeastOneSheetForExport() => "Ao menos uma planilha deve ser registrada para exportar o workbook.";
+    public string EmptyRow(int row) => $"A linha {row} está vazia.";
     public string DuplicateWorkbookModel(string modelName) => $"O modelo '{modelName}' foi registrado mais de uma vez na importação do workbook.";
     public string UnregisteredWorkbookModel(string modelName) => $"O validador do workbook retornou um erro para o modelo não registrado '{modelName}'.";
     public string AtLeastOneSheetForTemplate() => "Ao menos uma planilha deve ser registrada para gerar o template do workbook.";

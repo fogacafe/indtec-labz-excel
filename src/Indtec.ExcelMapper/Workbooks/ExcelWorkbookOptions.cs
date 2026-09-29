@@ -99,12 +99,18 @@ internal sealed class ExcelWorkbookImportRegistration<T> : IExcelWorkbookImportR
 
     public Type ModelType => typeof(T);
     public bool ShouldThrow => _options.ErrorBehavior == ExcelImportErrorBehavior.Throw;
+    public bool IsOptional => _options.OptionalSheet;
 
     public async Task<object> ImportAsync(
         ExcelMapper mapper,
         XLWorkbook workbook,
         CancellationToken cancellationToken)
-        => await mapper.ImportSheetAsync<T>(workbook, _options, cancellationToken).ConfigureAwait(false);
+    {
+        if (_options.OptionalSheet && !mapper.WorksheetExists<T>(workbook))
+            return new ExcelImportResult<T>(Array.Empty<T>(), Array.Empty<ExcelImportError>(), Array.Empty<ExcelImportRow<T>>());
+
+        return await mapper.ImportSheetAsync<T>(workbook, _options, cancellationToken).ConfigureAwait(false);
+    }
 
     public object AddValidationErrors(object result, IReadOnlyList<ExcelWorkbookValidationError> errors)
     {

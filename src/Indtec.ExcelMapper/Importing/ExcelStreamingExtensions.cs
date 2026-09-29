@@ -82,7 +82,28 @@ public static class ExcelStreamingExtensions
             }
 
             if (cells.Count == 0)
+            {
+                if (options.EmptyRowBehavior == ExcelEmptyRowBehavior.Ignore)
+                    continue;
+
+                var emptyError = options.EmptyRowBehavior == ExcelEmptyRowBehavior.Error
+                    ? new ExcelImportError(rowNumber, null, mapper.Messages.EmptyRow(rowNumber))
+                    : null;
+
+                if (emptyError is not null && options.ErrorBehavior == ExcelImportErrorBehavior.Throw)
+                    throw new ExcelMappingException(emptyError.ToString());
+
+                chunkRows.Add((rowNumber, new T(), emptyError is null
+                    ? Array.Empty<ExcelImportError>()
+                    : new[] { emptyError }));
+
+                if (chunkRows.Count >= chunkSize)
+                {
+                    await DeliverChunkAsync(chunkRows, chunkIndex++, onChunk, cancellationToken).ConfigureAwait(false);
+                    chunkRows.Clear();
+                }
                 continue;
+            }
 
             headers ??= new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             if (headers.Count == 0)
@@ -93,7 +114,7 @@ public static class ExcelStreamingExtensions
 
             foreach (var column in map.Columns)
             {
-                if (!headers.TryGetValue(column.Header, out var columnNumber))
+                if (!TryGetColumnNumber(headers, column, out var columnNumber))
                     continue;
 
                 if (column.Setter is null)
@@ -127,7 +148,7 @@ public static class ExcelStreamingExtensions
             {
                 var validationErrors = options.Validators
                     .Where(rule => !rule.Predicate(item))
-                    .Select(rule => new ExcelImportError(rowNumber, null, rule.Message))
+                    .Select(rule => new ExcelImportError(rowNumber, GetValidationColumn(map, rule.PropertyName), rule.Message))
                     .ToArray();
 
                 if (validationErrors.Length > 0 && options.ErrorBehavior == ExcelImportErrorBehavior.Throw)
@@ -201,13 +222,33 @@ public static class ExcelStreamingExtensions
         ExcelMapper mapper)
     {
         var missing = map.Columns
-            .Where(x => x.Required && !headers.ContainsKey(x.Header))
+            .Where(x => x.Required && !x.AcceptedHeaders().Any(headers.ContainsKey))
             .Select(x => x.Header)
             .ToArray();
 
         if (missing.Length > 0)
             throw new ExcelMappingException(mapper.Messages.RequiredColumnsNotFound(map.SheetName, missing));
     }
+
+    private static bool TryGetColumnNumber(
+        IReadOnlyDictionary<string, int> headers,
+        ExcelColumnMap column,
+        out int columnNumber)
+    {
+        foreach (var header in column.AcceptedHeaders())
+        {
+            if (headers.TryGetValue(header, out columnNumber))
+                return true;
+        }
+
+        columnNumber = 0;
+        return false;
+    }
+
+    private static string? GetValidationColumn(ExcelTypeMap map, string? propertyName)
+        => propertyName is null
+            ? null
+            : map.Columns.FirstOrDefault(x => x.PropertyName == propertyName)?.Header ?? propertyName;
 
     private static IReadOnlyList<string> ReadSharedStrings(WorkbookPart workbookPart)
         => workbookPart.SharedStringTablePart?.SharedStringTable?

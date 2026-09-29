@@ -13,7 +13,8 @@ public sealed class ExcelColumnMap
         Func<object, object?> getter,
         Action<object, object?>? setter,
         bool required = false,
-        IExcelValueConverter? converter = null)
+        IExcelValueConverter? converter = null,
+        IReadOnlyList<string>? aliases = null)
     {
         PropertyName = propertyName;
         Header = header;
@@ -23,6 +24,7 @@ public sealed class ExcelColumnMap
         Setter = setter;
         Required = required;
         Converter = converter;
+        Aliases = aliases ?? Array.Empty<string>();
     }
 
     public string PropertyName { get; }
@@ -33,6 +35,14 @@ public sealed class ExcelColumnMap
     public Action<object, object?>? Setter { get; }
     public bool Required { get; }
     public IExcelValueConverter? Converter { get; }
+    public IReadOnlyList<string> Aliases { get; }
+
+    public IEnumerable<string> AcceptedHeaders()
+    {
+        yield return Header;
+        foreach (var alias in Aliases)
+            yield return alias;
+    }
 }
 
 public sealed class ExcelTypeMap

@@ -68,7 +68,7 @@ mapper.Export(products, stream);
 stream.Position = 0;
 ```
 
-For multiple typed sheets in the same workbook, use `ExportWorkbook`. Each sheet keeps its own export configuration, converters, themes and styling:
+For multiple typed sheets in the same workbook, use `ExportWorkbook`. Each sheet keeps its own export configuration, converters, themes and styling. Set `options.SheetName` to override `[ExcelSheet]`, including when exporting the same model to multiple worksheets:
 
 ```csharp
 mapper.ExportWorkbook("report.xlsx", workbook =>
@@ -87,7 +87,24 @@ using var stream = File.OpenRead("products.xlsx");
 var products = mapper.Import<Product>(stream);
 ```
 
-Columns marked `Required = true` are validated before row mapping begins.
+Columns marked `Required = true` are validated before row mapping begins. Header matching is case-insensitive, column order does not matter, and missing optional columns are ignored.
+
+Import-only aliases let human-edited spreadsheets use alternate header names without changing the canonical export header:
+
+```csharp
+[ExcelColumn("Customer Id", Required = true,
+    Aliases = new[] { "CustomerId", "Customer ID", "Client Id" })]
+public int CustomerId { get; set; }
+```
+
+Column-scoped validation associates errors with the mapped column:
+
+```csharp
+options.Column(x => x.Price)
+    .Validate(value => value > 0, "Price must be positive.");
+```
+
+Empty rows are ignored by default. Set `EmptyRowBehavior` to `Include` or `Error` when a different contract is required.
 
 ## Import validation and error collection
 
@@ -238,7 +255,7 @@ var trades = result.Sheet<Trade>();
 var customers = result.Sheet<Customer>();
 ```
 
-The sheet name still comes from `[ExcelSheet]`; the workbook layer only orchestrates independent typed mappings.
+The sheet name still comes from `[ExcelSheet]`; the workbook layer only orchestrates independent typed mappings. A sheet can be made optional with `options.OptionalSheet = true`.
 
 ## Workbook-level validation
 
@@ -504,7 +521,9 @@ The package targets:
 - Common Excel display-format masks.
 - Excel template and multi-sheet workbook-template generation.
 - Custom dropdown values and automatic enum dropdowns.
-- Required-column validation.
+- Required-column validation with case-insensitive, order-independent headers and import aliases.
+- Column-scoped validation, configurable empty-row handling and optional workbook sheets.
+- Per-operation worksheet name overrides for export and templates.
 - Custom value converters.
 - Reusable typed themes.
 - Header, column and row styling.

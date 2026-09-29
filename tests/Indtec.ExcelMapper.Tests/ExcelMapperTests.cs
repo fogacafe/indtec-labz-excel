@@ -135,6 +135,153 @@ public sealed class ExcelMapperTests
     }
 
     [Fact]
+    public void Import_ShouldAcceptAliasesCaseInsensitiveOrderAndMissingOptionalColumns()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Products");
+            sheet.Cell(1, 1).Value = "PRODUCT NAME";
+            sheet.Cell(1, 2).Value = "id";
+            sheet.Cell(2, 1).Value = "Coffee";
+            sheet.Cell(2, 2).Value = 7;
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        var result = new ExcelMapper().Import<ProductRow>(stream);
+
+        Assert.Single(result);
+        Assert.Equal(7, result[0].Id);
+        Assert.Equal("Coffee", result[0].Name);
+        Assert.Equal(0m, result[0].Price);
+    }
+
+    [Fact]
+    public void Import_ColumnValidation_ShouldAssociateErrorWithMappedHeader()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Products");
+            sheet.Cell(1, 1).Value = "Id";
+            sheet.Cell(1, 2).Value = "Name";
+            sheet.Cell(1, 3).Value = "Price";
+            sheet.Cell(2, 1).Value = 1;
+            sheet.Cell(2, 2).Value = "Coffee";
+            sheet.Cell(2, 3).Value = -1;
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        var result = new ExcelMapper().Import<ProductRow>(stream, options =>
+        {
+            options.ErrorBehavior = ExcelImportErrorBehavior.Collect;
+            options.Column(x => x.Price).Validate(value => value >= 0, "Price cannot be negative.");
+        });
+
+        Assert.Empty(result.Items);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("Price", error.Column);
+    }
+
+    [Fact]
+    public void Import_ShouldMatchCanonicalHeaderCaseInsensitive()
+    {
+        using var stream = CreateProductsWorkbook(("NAME", "Coffee"), ("ID", 7));
+        var result = new ExcelMapper().Import<ProductRow>(stream);
+
+        var item = Assert.Single(result);
+        Assert.Equal(7, item.Id);
+        Assert.Equal("Coffee", item.Name);
+    }
+
+    [Fact]
+    public void Import_ShouldMatchAliasCaseInsensitive()
+    {
+        using var stream = CreateProductsWorkbook(("description", "Coffee"), ("Id", 7));
+        var result = new ExcelMapper().Import<ProductRow>(stream);
+
+        Assert.Equal("Coffee", Assert.Single(result).Name);
+    }
+
+    [Fact]
+    public void Import_ShouldMapColumnsRegardlessOfOrder()
+    {
+        using var stream = CreateProductsWorkbook(("Name", "Coffee"), ("Id", 7));
+        var result = new ExcelMapper().Import<ProductRow>(stream);
+
+        var item = Assert.Single(result);
+        Assert.Equal(7, item.Id);
+        Assert.Equal("Coffee", item.Name);
+    }
+
+    [Fact]
+    public void Import_ShouldAllowMissingOptionalColumn()
+    {
+        using var stream = CreateProductsWorkbook(("Id", 7), ("Name", "Coffee"));
+        var item = Assert.Single(new ExcelMapper().Import<ProductRow>(stream));
+
+        Assert.Equal(0m, item.Price);
+        Assert.False(item.Active);
+    }
+
+    [Fact]
+    public void Import_RequiredColumn_ShouldAcceptAlias()
+    {
+        using var stream = CreateProductsWorkbook(("Id", 7), ("Product Name", "Coffee"));
+        var item = Assert.Single(new ExcelMapper().Import<ProductRow>(stream));
+
+        Assert.Equal("Coffee", item.Name);
+    }
+
+    [Fact]
+    public void Import_EmptyRowBehaviorError_ShouldCollectEmptyRow()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Products");
+            sheet.Cell(1, 1).Value = "Id";
+            sheet.Cell(1, 2).Value = "Name";
+            sheet.Cell(2, 1).Value = 1;
+            sheet.Cell(2, 2).Value = "Coffee";
+            sheet.Cell(3, 1).Style.Font.Bold = true;
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        var result = new ExcelMapper().Import<ProductRow>(stream, options =>
+        {
+            options.ErrorBehavior = ExcelImportErrorBehavior.Collect;
+            options.EmptyRowBehavior = ExcelEmptyRowBehavior.Error;
+        });
+
+        Assert.Single(result.Items);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(3, error.Row);
+    }
+
+    private static MemoryStream CreateProductsWorkbook(params (string Header, object Value)[] columns)
+    {
+        var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Products");
+            for (var i = 0; i < columns.Length; i++)
+            {
+                sheet.Cell(1, i + 1).Value = columns[i].Header;
+                sheet.Cell(2, i + 1).Value = XLCellValue.FromObject(columns[i].Value);
+            }
+
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        return stream;
+    }
+
+    [Fact]
     public void CreateTemplate_ShouldGenerateHeadersStylesAndDropdowns()
     {
         var mapper = new ExcelMapper();
@@ -194,7 +341,7 @@ public partial class ProductRow
     [ExcelColumn("Id", Order = 1, Required = true)]
     public int Id { get; set; }
 
-    [ExcelColumn("Name", Order = 2, Required = true)]
+    [ExcelColumn("Name", Order = 2, Required = true, Aliases = new[] { "Product Name", "Description" })]
     public string Name { get; set; } = string.Empty;
 
     [ExcelColumn("Cost", Order = 3)]
