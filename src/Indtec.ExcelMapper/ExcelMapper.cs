@@ -45,6 +45,7 @@ public sealed class ExcelMapper
         var map = GetMap<T>();
         var options = new ExcelImportOptions<T>();
         configure?.Invoke(options);
+        options.ValidateConfiguration();
 
         if (options.BatchValidators.Count > 0)
             throw new ExcelMappingException(_messages.BatchValidatorsRequireAsync());
@@ -55,6 +56,7 @@ public sealed class ExcelMapper
 
         var items = new List<T>();
         var errors = new List<ExcelImportError>();
+        var reachedInvalidRowLimit = false;
 
         foreach (var row in GetDataRows(worksheet, options.EmptyRowBehavior))
         {
@@ -68,6 +70,11 @@ public sealed class ExcelMapper
                     if (options.ErrorBehavior == ExcelImportErrorBehavior.Throw)
                         throw new ExcelMappingException(error.ToString());
                     errors.Add(error);
+                    if (HasReachedInvalidRowLimit(errors, options.MaxInvalidRows))
+                    {
+                        reachedInvalidRowLimit = true;
+                        break;
+                    }
                     continue;
                 }
             }
@@ -95,7 +102,14 @@ public sealed class ExcelMapper
             }
 
             if (rowHasMappingErrors)
+            {
+                if (HasReachedInvalidRowLimit(errors, options.MaxInvalidRows))
+                {
+                    reachedInvalidRowLimit = true;
+                    break;
+                }
                 continue;
+            }
 
             var validationErrors = options.Validators
                 .Where(rule => !rule.Predicate(item))
@@ -108,13 +122,18 @@ public sealed class ExcelMapper
                     throw new ExcelMappingException(validationErrors[0].ToString());
 
                 errors.AddRange(validationErrors);
+                if (HasReachedInvalidRowLimit(errors, options.MaxInvalidRows))
+                {
+                    reachedInvalidRowLimit = true;
+                    break;
+                }
                 continue;
             }
 
             items.Add(item);
         }
 
-        return new ExcelImportResult<T>(items, errors);
+        return new ExcelImportResult<T>(items, errors, reachedInvalidRowLimit: reachedInvalidRowLimit);
     }
 
     public async Task<ExcelImportResult<T>> ImportAsync<T>(
@@ -126,6 +145,7 @@ public sealed class ExcelMapper
 
         var options = new ExcelImportOptions<T>();
         configure?.Invoke(options);
+        options.ValidateConfiguration();
 
         using var workbook = new XLWorkbook(stream);
         return await ImportSheetAsync<T>(workbook, options, cancellationToken).ConfigureAwait(false);
@@ -212,8 +232,9 @@ public sealed class ExcelMapper
 
         var parsedRows = new List<(int RowNumber, T Value)>();
         var errors = new List<ExcelImportError>();
+        var reachedInvalidRowLimit = false;
 
-        foreach (var row in worksheet.RowsUsed().Skip(1))
+        foreach (var row in GetDataRows(worksheet, options.EmptyRowBehavior))
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -225,6 +246,11 @@ public sealed class ExcelMapper
                 if (options.EmptyRowBehavior == ExcelEmptyRowBehavior.Error)
                 {
                     errors.Add(new ExcelImportError(rowNumber, null, _messages.EmptyRow(rowNumber)));
+                    if (HasReachedInvalidRowLimit(errors, options.MaxInvalidRows))
+                    {
+                        reachedInvalidRowLimit = true;
+                        break;
+                    }
                     continue;
                 }
             }
@@ -258,8 +284,15 @@ public sealed class ExcelMapper
 
             parsedRows.Add((rowNumber, item));
             errors.AddRange(rowErrors);
+
+            if (rowErrors.Count > 0 && HasReachedInvalidRowLimit(errors, options.MaxInvalidRows))
+            {
+                reachedInvalidRowLimit = true;
+                break;
+            }
         }
 
+        if (!reachedInvalidRowLimit)
         foreach (var validator in options.BatchValidators)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -294,7 +327,7 @@ public sealed class ExcelMapper
             .Select(row => row.Value)
             .ToArray();
 
-        return new ExcelImportResult<T>(items, errors.ToArray(), rows);
+        return new ExcelImportResult<T>(items, errors.ToArray(), rows, reachedInvalidRowLimit);
     }
 
     public void Export<T>(IEnumerable<T> items, Stream stream) where T : new()
@@ -319,7 +352,7 @@ public sealed class ExcelMapper
 
         WriteRows(worksheet, map, options, items);
 
-        FinishWorksheet(worksheet, options);
+        FinishWorksheet(worksheet, map, options);
         workbook.SaveAs(stream);
     }
 
@@ -378,7 +411,7 @@ public sealed class ExcelMapper
         var worksheet = workbook.AddWorksheet(sheetName);
         WriteHeaders(worksheet, map, options);
         WriteRows(worksheet, map, options, items);
-        FinishWorksheet(worksheet, options);
+        FinishWorksheet(worksheet, map, options);
     }
 
     public void CreateTemplate<T>(Stream stream) where T : new()
@@ -465,7 +498,7 @@ public sealed class ExcelMapper
             options,
             Math.Max(options.TemplateRows, items?.Count ?? 0));
 
-        FinishWorksheet(worksheet, options);
+        FinishWorksheet(worksheet, map, options);
     }
 
     private IXLWorksheet GetWorksheet(XLWorkbook workbook, ExcelTypeMap map)
@@ -563,8 +596,10 @@ public sealed class ExcelMapper
         for (var i = 0; i < map.Columns.Count; i++)
         {
             var cell = worksheet.Cell(1, i + 1);
-            cell.Value = map.Columns[i].Header;
+            var mappedColumn = map.Columns[i];
+            cell.Value = mappedColumn.Header;
             ClosedXmlStyleApplier.Apply(cell.Style, options.HeaderStyle);
+            ApplyDefaultColumnFormat(worksheet.Column(i + 1), mappedColumn.ValueType);
 
             if (options.Columns.TryGetValue(map.Columns[i].PropertyName, out var columnConfig))
             {
@@ -673,8 +708,43 @@ public sealed class ExcelMapper
             validationSheet.Visibility = XLWorksheetVisibility.VeryHidden;
     }
 
-    private static void FinishWorksheet<T>(IXLWorksheet worksheet, ExcelExportOptions<T> options)
+    private static void ApplyDefaultColumnFormat(IXLColumn column, Type valueType)
     {
+        var type = Nullable.GetUnderlyingType(valueType) ?? valueType;
+
+        if (type == typeof(DateTime))
+            column.Style.NumberFormat.Format = "yyyy-mm-dd hh:mm:ss";
+        else if (type == typeof(TimeSpan))
+            column.Style.NumberFormat.Format = "[h]:mm:ss";
+        else if (type == typeof(decimal) || type == typeof(double) || type == typeof(float))
+            column.Style.NumberFormat.Format = "#,##0.########";
+        else if (type == typeof(byte) || type == typeof(short) || type == typeof(int) || type == typeof(long))
+            column.Style.NumberFormat.Format = "0";
+        else if (type == typeof(string) || type == typeof(Guid) || type.IsEnum)
+            column.Style.NumberFormat.Format = "@";
+    }
+
+    private static bool HasReachedInvalidRowLimit(
+        IReadOnlyCollection<ExcelImportError> errors,
+        int? maxInvalidRows)
+        => maxInvalidRows.HasValue &&
+           errors.Where(error => error.Row > 0).Select(error => error.Row).Distinct().Take(maxInvalidRows.Value).Count() >= maxInvalidRows.Value;
+
+    private static void FinishWorksheet<T>(IXLWorksheet worksheet, ExcelTypeMap map, ExcelExportOptions<T> options)
+    {
+        if (options.AutoFitColumns)
+        {
+            foreach (var column in worksheet.ColumnsUsed())
+            {
+                var columnIndex = column.ColumnNumber();
+                var propertyName = map.Columns[columnIndex - 1].PropertyName;
+                var hasExplicitWidth = options.Columns.TryGetValue(propertyName, out var config) && config.Width.HasValue;
+
+                if (!hasExplicitWidth)
+                    column.AdjustToContents();
+            }
+        }
+
         if (options.FreezeHeader)
             worksheet.SheetView.FreezeRows(1);
 
