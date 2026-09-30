@@ -9,11 +9,13 @@ public sealed class ExcelImportResult<T>
     internal ExcelImportResult(
         IReadOnlyList<T> items,
         IReadOnlyList<ExcelImportError> errors,
-        IReadOnlyList<ExcelImportRow<T>>? rows = null)
+        IReadOnlyList<ExcelImportRow<T>>? rows = null,
+        bool reachedInvalidRowLimit = false)
     {
         Items = items;
         Errors = errors;
         Rows = rows ?? Array.Empty<ExcelImportRow<T>>();
+        ReachedInvalidRowLimit = reachedInvalidRowLimit;
     }
 
     /// <summary>Gets successfully mapped and validated items.</summary>
@@ -27,6 +29,11 @@ public sealed class ExcelImportResult<T>
 
     /// <summary>Gets whether the import completed without mapping or validation errors.</summary>
     public bool IsValid => Errors.Count == 0;
+
+    /// <summary>
+    /// Gets whether parsing stopped early because <c>MaxInvalidRows</c> was reached.
+    /// </summary>
+    public bool ReachedInvalidRowLimit { get; }
 }
 
 /// <summary>
