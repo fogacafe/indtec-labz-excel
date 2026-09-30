@@ -62,22 +62,6 @@ public sealed class ExcelImportOptions<T>
     internal void AddNormalizer(string propertyName, Func<object?, object?> normalizer)
         => Normalizers[propertyName] = normalizer;
 
-    internal void Normalize(T item)
-    {
-        foreach (var normalizer in Normalizers)
-        {
-            var property = typeof(T).GetProperty(normalizer.Key);
-            if (property is null || !property.CanRead || !property.CanWrite)
-                continue;
-
-            var value = property.GetValue(item);
-            if (value is null || value is string text && string.IsNullOrWhiteSpace(text))
-                continue;
-
-            property.SetValue(item, normalizer.Value(value));
-        }
-    }
-
     internal void ValidateConfiguration()
     {
         if (MaxInvalidRows is <= 0)
