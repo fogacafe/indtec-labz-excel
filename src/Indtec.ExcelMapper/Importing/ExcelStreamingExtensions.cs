@@ -96,7 +96,12 @@ public static class ExcelStreamingExtensions
 
             expectedDataRow = rowNumber + 1;
 
-            if (cells.Count == 0)
+            var mappedRowIsEmpty = headers is not null && map.Columns
+                .Select(column => TryGetColumnNumber(headers, column, out var number) ? number : 0)
+                .Where(number => number > 0)
+                .All(number => !cells.ContainsKey(number));
+
+            if (cells.Count == 0 || mappedRowIsEmpty)
             {
                 if (options.EmptyRowBehavior == ExcelEmptyRowBehavior.Stop)
                     break;
