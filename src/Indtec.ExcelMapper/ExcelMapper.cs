@@ -226,6 +226,7 @@ public sealed class ExcelMapper
         ExcelImportOptions<T> options,
         CancellationToken cancellationToken) where T : new()
     {
+        options.ValidateConfiguration();
         var map = GetMap<T>();
         var worksheet = GetWorksheet(workbook, map);
         var headers = GetHeaders(worksheet, map);
