@@ -43,7 +43,6 @@ public sealed class ExcelImportOptions<T>
     public int? MaxInvalidRows { get; set; }
 
     /// <summary>Adds a row validation rule. The row is valid when the predicate returns true.</summary>
-    /// <summary>Adds a column validation rule. The value is valid when the predicate returns true.</summary>
     public ExcelImportOptions<T> Validate(Func<T, bool> predicate, string message)
         => AddValidation(predicate, null, message);
 
@@ -108,6 +107,7 @@ public sealed class ExcelImportColumnBuilder<T, TProperty>
         _selector = selector;
     }
 
+    /// <summary>Adds a column validation rule. The value is valid when the predicate returns true.</summary>
     public ExcelImportOptions<T> Validate(Func<TProperty, bool> predicate, string message)
     {
         if (predicate is null) throw new ArgumentNullException(nameof(predicate));
