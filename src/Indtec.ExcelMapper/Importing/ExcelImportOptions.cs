@@ -19,7 +19,9 @@ public enum ExcelEmptyRowBehavior
     /// <summary>Includes empty rows as default model instances.</summary>
     Include,
     /// <summary>Reports empty rows as import errors.</summary>
-    Error
+    Error,
+    /// <summary>Stops importing the worksheet at the first empty mapped data row.</summary>
+    Stop
 }
 
 /// <summary>Configures mapping, normalization and validation for an import operation.</summary>

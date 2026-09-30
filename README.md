@@ -11,6 +11,19 @@ A source-generated Excel mapper for .NET: strongly typed `.xlsx` import/export, 
 dotnet add package Indtec.ExcelMapper
 ```
 
+## Stop at the first empty row
+
+For bulk-import worksheets where a blank row is used as an intentional end marker, set `EmptyRowBehavior` to `Stop`:
+
+```csharp
+var result = mapper.Import<TradeRow>(stream, options =>
+{
+    options.EmptyRowBehavior = ExcelEmptyRowBehavior.Stop;
+});
+```
+
+The first empty mapped data row ends that worksheet import. Rows below it are not parsed, validated, or returned. The same behavior is supported by synchronous, asynchronous/workbook, and streaming chunk imports. A completely blank physical row omitted by the XLSX Open XML is also detected by streaming import.
+
 ## Why
 
 Excel integrations tend to accumulate repetitive header lookup, conversion, validation, styling and property-assignment code. `Indtec.ExcelMapper` keeps that mapping declarative while generating strongly typed accessors at compile time.
