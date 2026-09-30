@@ -193,6 +193,76 @@ public sealed class StreamingChunkImportTests
         Assert.Equal("000000300", imported!.Name);
     }
 
+
+    [Fact]
+    public async Task ImportChunksAsync_EmptyRowBehaviorStop_ShouldStopAtMissingPhysicalRow()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("StreamingRows");
+            sheet.Cell(1, 1).Value = "Id";
+            sheet.Cell(1, 2).Value = "Name";
+            sheet.Cell(1, 3).Value = "Amount";
+            sheet.Cell(1, 4).Value = "TradeDate";
+            WriteStreamingRow(sheet, 2, 1, "First");
+            WriteStreamingRow(sheet, 4, 2, "Must not import");
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        var ids = new List<int>();
+        await new ExcelMapper().ImportChunksAsync<StreamingRow>(
+            stream,
+            (chunk, _) =>
+            {
+                ids.AddRange(chunk.Items.Select(x => x.Id));
+                return Task.CompletedTask;
+            },
+            configure: options => options.EmptyRowBehavior = ExcelEmptyRowBehavior.Stop);
+
+        Assert.Equal(new[] { 1 }, ids);
+    }
+
+    [Fact]
+    public async Task ImportChunksAsync_EmptyRowBehaviorStop_ShouldStopAtExplicitMappedEmptyRow()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("StreamingRows");
+            sheet.Cell(1, 1).Value = "Id";
+            sheet.Cell(1, 2).Value = "Name";
+            sheet.Cell(1, 3).Value = "Amount";
+            sheet.Cell(1, 4).Value = "TradeDate";
+            WriteStreamingRow(sheet, 2, 1, "First");
+            sheet.Cell(3, 1).Style.Font.Bold = true;
+            WriteStreamingRow(sheet, 4, 2, "Must not import");
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        var ids = new List<int>();
+        await new ExcelMapper().ImportChunksAsync<StreamingRow>(
+            stream,
+            (chunk, _) =>
+            {
+                ids.AddRange(chunk.Items.Select(x => x.Id));
+                return Task.CompletedTask;
+            },
+            configure: options => options.EmptyRowBehavior = ExcelEmptyRowBehavior.Stop);
+
+        Assert.Equal(new[] { 1 }, ids);
+    }
+
+    private static void WriteStreamingRow(IXLWorksheet sheet, int row, int id, string name)
+    {
+        sheet.Cell(row, 1).Value = id;
+        sheet.Cell(row, 2).Value = name;
+        sheet.Cell(row, 3).Value = 10;
+        sheet.Cell(row, 4).Value = new DateTime(2026, 9, 1);
+    }
+
     [Fact]
     public async Task ImportChunksAsync_ShouldRejectFullSheetBatchValidators()
     {
