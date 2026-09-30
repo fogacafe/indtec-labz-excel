@@ -263,6 +263,83 @@ public sealed class ExcelMapperTests
     }
 
 
+
+    [Fact]
+    public void Import_EmptyRowBehaviorStop_ShouldIgnoreRowsAfterFirstEmptyMappedRow()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Products");
+            sheet.Cell(1, 1).Value = "Id";
+            sheet.Cell(1, 2).Value = "Name";
+            sheet.Cell(2, 1).Value = 1;
+            sheet.Cell(2, 2).Value = "First";
+            sheet.Cell(3, 1).Value = 2;
+            sheet.Cell(3, 2).Value = "Second";
+            sheet.Cell(5, 1).Value = 3;
+            sheet.Cell(5, 2).Value = "Must not import";
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        var result = new ExcelMapper().Import<ProductRow>(stream,
+            options => options.EmptyRowBehavior = ExcelEmptyRowBehavior.Stop);
+
+        Assert.Equal(new[] { 1, 2 }, result.Items.Select(x => x.Id));
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public void Import_EmptyRowBehaviorStop_ShouldReturnNoItems_WhenFirstDataRowIsEmpty()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Products");
+            sheet.Cell(1, 1).Value = "Id";
+            sheet.Cell(1, 2).Value = "Name";
+            sheet.Cell(3, 1).Value = 1;
+            sheet.Cell(3, 2).Value = "Must not import";
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        var result = new ExcelMapper().Import<ProductRow>(stream,
+            options => options.EmptyRowBehavior = ExcelEmptyRowBehavior.Stop);
+
+        Assert.Empty(result.Items);
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public async Task ImportAsync_EmptyRowBehaviorStop_ShouldExcludeLaterRowsFromBatchValidation()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Products");
+            sheet.Cell(1, 1).Value = "Id";
+            sheet.Cell(1, 2).Value = "Name";
+            sheet.Cell(2, 1).Value = 1;
+            sheet.Cell(2, 2).Value = "First";
+            sheet.Cell(4, 1).Value = 2;
+            sheet.Cell(4, 2).Value = "Must not reach validator";
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        var validator = new CapturingProductBatchValidator();
+        var result = await new ExcelMapper().ImportAsync<ProductRow>(stream, options =>
+        {
+            options.EmptyRowBehavior = ExcelEmptyRowBehavior.Stop;
+            options.AddBatchValidator(validator);
+        });
+
+        Assert.Single(result.Items);
+        Assert.Equal(new[] { 1 }, validator.Ids);
+    }
+
     [Fact]
     public void Export_AutoFitColumns_ShouldConsiderDataAndRespectExplicitWidth()
     {
@@ -445,6 +522,19 @@ public sealed class ExcelMapperTests
         Assert.True(sheet.Cell(1, 1).Style.Font.Bold);
         Assert.Equal(18d, sheet.Column(4).Width);
         Assert.True(sheet.DataValidations.Any());
+    }
+}
+
+internal sealed class CapturingProductBatchValidator : IExcelBatchValidator<ProductRow>
+{
+    public int[] Ids { get; private set; } = Array.Empty<int>();
+
+    public Task<IReadOnlyList<ExcelImportError>> ValidateAsync(
+        ExcelBatchValidationContext<ProductRow> context,
+        CancellationToken cancellationToken = default)
+    {
+        Ids = context.Rows.Select(x => x.Value.Id).ToArray();
+        return Task.FromResult<IReadOnlyList<ExcelImportError>>(Array.Empty<ExcelImportError>());
     }
 }
 
