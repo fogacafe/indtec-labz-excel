@@ -24,8 +24,21 @@ public sealed class ExcelImportOptions<T>
     public ExcelEmptyRowBehavior EmptyRowBehavior { get; set; } = ExcelEmptyRowBehavior.Ignore;
     public bool OptionalSheet { get; set; }
 
+    /// <summary>
+    /// Gets or sets the maximum number of invalid worksheet rows collected before parsing stops.
+    /// Null means no limit. The limit applies to invalid rows, not individual error messages.
+    /// </summary>
+    public int? MaxInvalidRows { get; set; }
+
     public ExcelImportOptions<T> Validate(Func<T, bool> predicate, string message)
         => AddValidation(predicate, null, message);
+
+    /// <summary>Adds a row error when the predicate evaluates to true.</summary>
+    public ExcelImportOptions<T> ErrorWhen(Func<T, bool> predicate, string message)
+    {
+        if (predicate is null) throw new ArgumentNullException(nameof(predicate));
+        return AddValidation(row => !predicate(row), null, message);
+    }
 
     public ExcelImportColumnBuilder<T, TProperty> Column<TProperty>(Expression<Func<T, TProperty>> selector)
     {
@@ -43,6 +56,12 @@ public sealed class ExcelImportOptions<T>
 
         Validators.Add(new ExcelRowValidationRule<T>(predicate, propertyName, message));
         return this;
+    }
+
+    internal void ValidateConfiguration()
+    {
+        if (MaxInvalidRows is <= 0)
+            throw new ArgumentOutOfRangeException(nameof(MaxInvalidRows), "MaxInvalidRows must be greater than zero.");
     }
 
     public ExcelImportOptions<T> AddBatchValidator(IExcelBatchValidator<T> validator)
@@ -73,6 +92,13 @@ public sealed class ExcelImportColumnBuilder<T, TProperty>
     {
         if (predicate is null) throw new ArgumentNullException(nameof(predicate));
         return _options.AddValidation(row => predicate(_selector(row)), _propertyName, message);
+    }
+
+    /// <summary>Adds a column error when the predicate evaluates to true.</summary>
+    public ExcelImportOptions<T> ErrorWhen(Func<TProperty, bool> predicate, string message)
+    {
+        if (predicate is null) throw new ArgumentNullException(nameof(predicate));
+        return _options.AddValidation(row => !predicate(_selector(row)), _propertyName, message);
     }
 }
 
