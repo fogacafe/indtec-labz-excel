@@ -742,16 +742,18 @@ public sealed class ExcelMapper
     {
         var type = Nullable.GetUnderlyingType(valueType) ?? valueType;
 
+        // Use Excel built-in number formats for inferred CLR types. Built-in formats are
+        // rendered according to the user's Excel locale, unlike custom format strings.
         if (type == typeof(DateTime))
-            column.Style.NumberFormat.Format = "yyyy-mm-dd hh:mm:ss";
+            column.Style.NumberFormat.NumberFormatId = 14; // Date
         else if (type == typeof(TimeSpan))
-            column.Style.NumberFormat.Format = "[h]:mm:ss";
+            column.Style.NumberFormat.NumberFormatId = 46; // Duration
         else if (type == typeof(decimal) || type == typeof(double) || type == typeof(float))
-            column.Style.NumberFormat.Format = "#,##0.########";
+            column.Style.NumberFormat.NumberFormatId = 2; // Number with two decimal places
         else if (type == typeof(byte) || type == typeof(short) || type == typeof(int) || type == typeof(long))
-            column.Style.NumberFormat.Format = "0";
+            column.Style.NumberFormat.NumberFormatId = 1; // Integer number
         else if (type == typeof(string) || type == typeof(Guid) || type.IsEnum)
-            column.Style.NumberFormat.Format = "@";
+            column.Style.NumberFormat.NumberFormatId = 49; // Text
     }
 
     private static void NormalizeItem<T>(T item, ExcelTypeMap map, ExcelImportOptions<T> options)
