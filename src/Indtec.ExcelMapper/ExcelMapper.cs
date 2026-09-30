@@ -68,6 +68,8 @@ public sealed class ExcelMapper
         {
             if (IsMappedRowEmpty(row, headers, map))
             {
+                if (options.EmptyRowBehavior == ExcelEmptyRowBehavior.Stop)
+                    break;
                 if (options.EmptyRowBehavior == ExcelEmptyRowBehavior.Ignore)
                     continue;
                 if (options.EmptyRowBehavior == ExcelEmptyRowBehavior.Error)
@@ -252,6 +254,8 @@ public sealed class ExcelMapper
             var rowNumber = row.RowNumber();
             if (IsMappedRowEmpty(row, headers, map))
             {
+                if (options.EmptyRowBehavior == ExcelEmptyRowBehavior.Stop)
+                    break;
                 if (options.EmptyRowBehavior == ExcelEmptyRowBehavior.Ignore)
                     continue;
                 if (options.EmptyRowBehavior == ExcelEmptyRowBehavior.Error)
