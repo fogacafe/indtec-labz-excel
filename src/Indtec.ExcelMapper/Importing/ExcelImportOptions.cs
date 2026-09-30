@@ -127,6 +127,34 @@ public sealed class ExcelImportColumnBuilder<T, TProperty>
         return this;
     }
 
+    /// <summary>
+    /// Treats the Excel value as a fractional percentage and normalizes it to a 0-100 scale.
+    /// For example, both an Excel 100% cell and the numeric value 1 are imported as 100.
+    /// The normalization uses the stored numeric value, so it remains stable if the user
+    /// changes the cell formatting from Percentage to Number.
+    /// </summary>
+    public ExcelImportColumnBuilder<T, TProperty> AsPercentage()
+    {
+        var type = Nullable.GetUnderlyingType(typeof(TProperty)) ?? typeof(TProperty);
+        if (type != typeof(decimal) && type != typeof(double) && type != typeof(float))
+            throw new InvalidOperationException("AsPercentage can only be used with decimal, double, or float columns.");
+
+        _options.AddNormalizer(_propertyName, value =>
+        {
+            if (value is null)
+                return null;
+
+            if (type == typeof(decimal))
+                return (decimal)value * 100m;
+            if (type == typeof(double))
+                return (double)value * 100d;
+
+            return (float)value * 100f;
+        });
+
+        return this;
+    }
+
     /// <summary>Adds a column error when the predicate evaluates to true.</summary>
     public ExcelImportOptions<T> ErrorWhen(Func<TProperty, bool> predicate, string message)
     {
