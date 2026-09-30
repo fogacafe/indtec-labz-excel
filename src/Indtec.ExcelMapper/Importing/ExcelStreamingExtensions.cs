@@ -8,8 +8,13 @@ using Indtec.ExcelMapper.Mapping;
 
 namespace Indtec.ExcelMapper.Importing;
 
+/// <summary>Provides bounded-memory streaming import for large XLSX worksheets.</summary>
 public static class ExcelStreamingExtensions
 {
+    /// <summary>
+    /// Streams a mapped worksheet and delivers rows in bounded chunks without loading the complete sheet into memory.
+    /// Batch validators are not supported because they require full-sheet context.
+    /// </summary>
     public static async Task ImportChunksAsync<T>(
         this ExcelMapper mapper,
         Stream stream,

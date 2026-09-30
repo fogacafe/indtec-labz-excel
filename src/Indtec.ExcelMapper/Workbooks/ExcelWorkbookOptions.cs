@@ -4,11 +4,13 @@ using Indtec.ExcelMapper.Styling;
 
 namespace Indtec.ExcelMapper.Workbooks;
 
+/// <summary>Configures the worksheets and validators used by a workbook import.</summary>
 public sealed class ExcelWorkbookImportOptions
 {
     internal List<IExcelWorkbookImportRegistration> Sheets { get; } = new();
     internal List<IExcelWorkbookValidator> Validators { get; } = new();
 
+    /// <summary>Registers a mapped worksheet model for workbook import.</summary>
     public ExcelWorkbookImportOptions Sheet<T>(Action<ExcelImportOptions<T>>? configure = null) where T : new()
     {
         var options = new ExcelImportOptions<T>();
@@ -17,6 +19,7 @@ public sealed class ExcelWorkbookImportOptions
         return this;
     }
 
+    /// <summary>Adds a validator that can inspect results across registered worksheets.</summary>
     public ExcelWorkbookImportOptions AddValidator(IExcelWorkbookValidator validator)
     {
         if (validator is null) throw new ArgumentNullException(nameof(validator));
@@ -25,10 +28,12 @@ public sealed class ExcelWorkbookImportOptions
     }
 }
 
+/// <summary>Configures worksheets included in a workbook export.</summary>
 public sealed class ExcelWorkbookExportOptions
 {
     internal List<IExcelWorkbookExportRegistration> Sheets { get; } = new();
 
+    /// <summary>Registers items as a worksheet in the exported workbook.</summary>
     public ExcelWorkbookExportOptions Sheet<T>(
         IEnumerable<T> items,
         Action<ExcelExportOptions<T>>? configure = null) where T : new()
@@ -42,10 +47,12 @@ public sealed class ExcelWorkbookExportOptions
     }
 }
 
+/// <summary>Configures worksheets included in a generated workbook template.</summary>
 public sealed class ExcelWorkbookTemplateOptions
 {
     internal List<IExcelWorkbookTemplateRegistration> Sheets { get; } = new();
 
+    /// <summary>Registers an empty mapped worksheet in the generated workbook template.</summary>
     public ExcelWorkbookTemplateOptions Sheet<T>(Action<ExcelExportOptions<T>>? configure = null) where T : new()
     {
         var options = new ExcelExportOptions<T>();
@@ -54,6 +61,7 @@ public sealed class ExcelWorkbookTemplateOptions
         return this;
     }
 
+    /// <summary>Registers a mapped worksheet pre-populated with the supplied items.</summary>
     public ExcelWorkbookTemplateOptions Sheet<T>(
         IEnumerable<T> items,
         Action<ExcelExportOptions<T>>? configure = null) where T : new()
@@ -67,6 +75,7 @@ public sealed class ExcelWorkbookTemplateOptions
     }
 }
 
+/// <summary>Contains typed import results for worksheets registered in a workbook import.</summary>
 public sealed class ExcelWorkbookImportResult
 {
     private readonly Dictionary<Type, object> _results;
@@ -74,6 +83,7 @@ public sealed class ExcelWorkbookImportResult
     internal ExcelWorkbookImportResult(Dictionary<Type, object> results)
         => _results = results;
 
+    /// <summary>Gets the import result registered for the specified mapped model type.</summary>
     public ExcelImportResult<T> Sheet<T>()
     {
         if (_results.TryGetValue(typeof(T), out var result) && result is ExcelImportResult<T> typed)
