@@ -58,6 +58,7 @@ public static class ExcelStreamingExtensions
         Dictionary<string, int>? headers = null;
         var chunkRows = new List<(int RowNumber, T Value, IReadOnlyList<ExcelImportError> Errors)>(chunkSize);
         var chunkIndex = 1;
+        var expectedDataRow = 2;
 
         using var reader = OpenXmlReader.Create(worksheetPart);
         while (reader.Read())
@@ -87,8 +88,18 @@ public static class ExcelStreamingExtensions
                 continue;
             }
 
+            // Open XML may omit completely blank rows from the file. A gap in row
+            // indexes therefore represents an empty row just as much as an explicit
+            // row element with no mapped values.
+            if (options.EmptyRowBehavior == ExcelEmptyRowBehavior.Stop && rowNumber > expectedDataRow)
+                break;
+
+            expectedDataRow = rowNumber + 1;
+
             if (cells.Count == 0)
             {
+                if (options.EmptyRowBehavior == ExcelEmptyRowBehavior.Stop)
+                    break;
                 if (options.EmptyRowBehavior == ExcelEmptyRowBehavior.Ignore)
                     continue;
 
