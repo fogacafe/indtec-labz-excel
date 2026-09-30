@@ -384,10 +384,13 @@ public sealed class ExcelMapperTests
         var sheet = workbook.Worksheet("Typed");
 
         Assert.Equal(XLDataType.DateTime, sheet.Cell(2, 1).DataType);
-        Assert.Equal("yyyy-mm-dd hh:mm:ss", sheet.Column(1).Style.NumberFormat.Format);
+        Assert.Equal(14, sheet.Column(1).Style.NumberFormat.NumberFormatId);
+        Assert.Equal(string.Empty, sheet.Column(1).Style.NumberFormat.Format);
         Assert.Equal(XLDataType.Number, sheet.Cell(2, 2).DataType);
-        Assert.Equal("#,##0.########", sheet.Column(2).Style.NumberFormat.Format);
-        Assert.Equal("0", sheet.Column(3).Style.NumberFormat.Format);
+        Assert.Equal(2, sheet.Column(2).Style.NumberFormat.NumberFormatId);
+        Assert.Equal(string.Empty, sheet.Column(2).Style.NumberFormat.Format);
+        Assert.Equal(1, sheet.Column(3).Style.NumberFormat.NumberFormatId);
+        Assert.Equal(string.Empty, sheet.Column(3).Style.NumberFormat.Format);
     }
 
     [Fact]
