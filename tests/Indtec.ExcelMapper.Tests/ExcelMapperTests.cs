@@ -262,6 +262,108 @@ public sealed class ExcelMapperTests
         Assert.Equal(3, error.Row);
     }
 
+
+    [Fact]
+    public void Export_AutoFitColumns_ShouldConsiderDataAndRespectExplicitWidth()
+    {
+        var mapper = new ExcelMapper();
+        using var stream = new MemoryStream();
+
+        mapper.Export(new[]
+        {
+            new ProductRow { Id = 1, Name = "A product name much longer than its header" }
+        }, stream, options =>
+        {
+            options.AutoFitColumns = true;
+            options.Column(x => x.Id).Width(22);
+        });
+
+        stream.Position = 0;
+        using var workbook = new XLWorkbook(stream);
+        var sheet = workbook.Worksheet("Products");
+
+        Assert.Equal(22d, sheet.Column(1).Width);
+        Assert.True(sheet.Column(2).Width > "Name".Length);
+    }
+
+    [Fact]
+    public void Export_ShouldApplyNativeColumnFormatsFromMappedTypes()
+    {
+        var mapper = new ExcelMapper();
+        using var stream = new MemoryStream();
+
+        mapper.Export(new[]
+        {
+            new TypedRow
+            {
+                When = new DateTime(2026, 9, 29, 14, 30, 0),
+                Amount = 123.45m,
+                Count = 7
+            }
+        }, stream);
+
+        stream.Position = 0;
+        using var workbook = new XLWorkbook(stream);
+        var sheet = workbook.Worksheet("Typed");
+
+        Assert.Equal(XLDataType.DateTime, sheet.Cell(2, 1).DataType);
+        Assert.Equal("yyyy-mm-dd hh:mm:ss", sheet.Column(1).Style.NumberFormat.Format);
+        Assert.Equal(XLDataType.Number, sheet.Cell(2, 2).DataType);
+        Assert.Equal("#,##0.########", sheet.Column(2).Style.NumberFormat.Format);
+        Assert.Equal("0", sheet.Column(3).Style.NumberFormat.Format);
+    }
+
+    [Fact]
+    public void Import_ErrorWhen_ShouldTreatTrueAsAnError()
+    {
+        using var stream = CreateProductsWorkbook(("Id", 7), ("Name", "Coffee"), ("Price", -1));
+        var result = new ExcelMapper().Import<ProductRow>(stream, options =>
+        {
+            options.ErrorBehavior = ExcelImportErrorBehavior.Collect;
+            options.Column(x => x.Price).ErrorWhen(value => value < 0, "Price cannot be negative.");
+        });
+
+        Assert.Empty(result.Items);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("Price", error.Column);
+        Assert.Contains("negative", error.Message);
+    }
+
+    [Fact]
+    public void Import_MaxInvalidRows_ShouldStopAfterConfiguredNumberOfInvalidRows()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Products");
+            sheet.Cell(1, 1).Value = "Id";
+            sheet.Cell(1, 2).Value = "Name";
+            sheet.Cell(1, 3).Value = "Price";
+
+            for (var row = 2; row <= 20; row++)
+            {
+                sheet.Cell(row, 1).Value = row;
+                sheet.Cell(row, 2).Value = $"Product {row}";
+                sheet.Cell(row, 3).Value = -1;
+            }
+
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        var result = new ExcelMapper().Import<ProductRow>(stream, options =>
+        {
+            options.ErrorBehavior = ExcelImportErrorBehavior.Collect;
+            options.MaxInvalidRows = 3;
+            options.Column(x => x.Price).ErrorWhen(value => value < 0, "Invalid price.");
+            options.Validate(row => row.Name.Length > 0, "Name is required.");
+        });
+
+        Assert.True(result.ReachedInvalidRowLimit);
+        Assert.Equal(3, result.Errors.Select(error => error.Row).Distinct().Count());
+        Assert.Empty(result.Items);
+    }
+
     private static MemoryStream CreateProductsWorkbook(params (string Header, object Value)[] columns)
     {
         var stream = new MemoryStream();
@@ -355,4 +457,18 @@ public partial class ProductRow
 
     [ExcelColumn("Status", Order = 6)]
     public ProductStatus Status { get; set; }
+}
+
+
+[ExcelSheet("Typed")]
+public partial class TypedRow
+{
+    [ExcelColumn("When", Order = 1)]
+    public DateTime When { get; set; }
+
+    [ExcelColumn("Amount", Order = 2)]
+    public decimal Amount { get; set; }
+
+    [ExcelColumn("Count", Order = 3)]
+    public int Count { get; set; }
 }
