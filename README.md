@@ -119,6 +119,21 @@ options.Column(x => x.Price)
 
 Empty rows are ignored by default. Set `EmptyRowBehavior` to `Include` or `Error` when a different contract is required.
 
+## Percentage normalization
+
+For domain properties that use a 0-100 percentage scale, opt in with `AsPercentage()`:
+
+```csharp
+var result = mapper.Import<TradeRow>(stream, options =>
+{
+    options.Column(x => x.Rate).AsPercentage();
+});
+```
+
+The mapper normalizes Excel's stored fractional value to the 0-100 domain scale: `100%` and numeric `1` both become `100`, while `50%` and numeric `0.5` both become `50`. Because normalization uses the stored numeric value rather than relying on the cell's display format, it continues to work when a user changes a Percentage-formatted cell to Number.
+
+`AsPercentage()` is opt-in and supports `decimal`, `double`, and `float` columns.
+
 ## Import validation and error collection
 
 Use typed row rules when business validation needs values from more than one cell.

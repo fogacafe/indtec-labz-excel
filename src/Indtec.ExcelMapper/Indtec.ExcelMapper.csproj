@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <PackageId>Indtec.ExcelMapper</PackageId>
-    <Version>1.5.0</Version>
+    <Version>1.9.0</Version>
     <Title>Indtec.ExcelMapper</Title>
     <Authors>fogacafe</Authors>
     <Company>Indtec</Company>
@@ -14,7 +14,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <PackageReleaseNotes>Adds resilient imports with header aliases, column validation, empty-row policies, optional workbook sheets, and per-operation worksheet name overrides.</PackageReleaseNotes>
+    <PackageReleaseNotes>Uses native Excel built-in formats for inferred column types and adds opt-in percentage normalization for imports.</PackageReleaseNotes>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 
