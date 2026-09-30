@@ -153,6 +153,46 @@ public sealed class StreamingChunkImportTests
         Assert.Equal(2, error.Row);
     }
 
+
+    [Fact]
+    public async Task ImportChunksAsync_ShouldNormalizeBeforeValidation()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("StreamingRows");
+            sheet.Cell(1, 1).Value = "Id";
+            sheet.Cell(1, 2).Value = "Name";
+            sheet.Cell(1, 3).Value = "Amount";
+            sheet.Cell(1, 4).Value = "TradeDate";
+            sheet.Cell(2, 1).Value = 1;
+            sheet.Cell(2, 2).Value = "  300  ";
+            sheet.Cell(2, 3).Value = 10;
+            sheet.Cell(2, 4).Value = new DateTime(2026, 9, 1);
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        StreamingRow? imported = null;
+
+        await new ExcelMapper().ImportChunksAsync<StreamingRow>(
+            stream,
+            (chunk, _) =>
+            {
+                imported = Assert.Single(chunk.Items);
+                return Task.CompletedTask;
+            },
+            configure: options =>
+            {
+                options.Column(x => x.Name)
+                    .Normalize(value => value.Trim().PadLeft(9, '0'))
+                    .Validate(value => value == "000000300", "Name was not normalized.");
+            });
+
+        Assert.NotNull(imported);
+        Assert.Equal("000000300", imported!.Name);
+    }
+
     [Fact]
     public async Task ImportChunksAsync_ShouldRejectFullSheetBatchValidators()
     {
