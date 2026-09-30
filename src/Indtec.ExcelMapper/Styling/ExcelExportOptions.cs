@@ -16,7 +16,13 @@ public sealed class ExcelExportOptions<T>
     public string? SheetName { get; set; }
     public bool FreezeHeader { get; set; } = true;
     public bool AutoFilter { get; set; } = true;
+    /// <summary>Auto-sizes columns using the header row only.</summary>
     public bool AutoFitHeaders { get; set; }
+
+    /// <summary>
+    /// Auto-sizes columns using headers and exported/template data. Explicit Width(...) always wins.
+    /// </summary>
+    public bool AutoFitColumns { get; set; }
     public int TemplateRows { get; set; } = 1000;
 
     public ExcelExportOptions<T> UseTheme(IExcelTheme<T> theme)
