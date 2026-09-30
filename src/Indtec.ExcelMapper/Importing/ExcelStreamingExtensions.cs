@@ -27,6 +27,7 @@ public static class ExcelStreamingExtensions
 
         var options = new ExcelImportOptions<T>();
         configure?.Invoke(options);
+        options.ValidateConfiguration();
 
         if (options.BatchValidators.Count > 0)
             throw new ExcelMappingException(mapper.Messages.StreamingBatchValidatorsNotSupported());
@@ -146,6 +147,8 @@ public static class ExcelStreamingExtensions
 
             if (errors.Count == 0)
             {
+                NormalizeItem(item, map, options);
+
                 var validationErrors = options.Validators
                     .Where(rule => !rule.Predicate(item))
                     .Select(rule => new ExcelImportError(rowNumber, GetValidationColumn(map, rule.PropertyName), rule.Message))
@@ -174,6 +177,22 @@ public static class ExcelStreamingExtensions
 
         if (chunkRows.Count > 0)
             await DeliverChunkAsync(chunkRows, chunkIndex, onChunk, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static void NormalizeItem<T>(T item, ExcelTypeMap map, ExcelImportOptions<T> options)
+    {
+        foreach (var pair in options.Normalizers)
+        {
+            var column = map.Columns.First(x => x.PropertyName == pair.Key);
+            if (column.Setter is null)
+                continue;
+
+            var value = column.Getter(item!);
+            if (value is null || value is string text && string.IsNullOrWhiteSpace(text))
+                continue;
+
+            column.Setter(item!, pair.Value(value));
+        }
     }
 
     private static async Task DeliverChunkAsync<T>(
