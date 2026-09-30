@@ -8,23 +8,27 @@ using Indtec.ExcelMapper.Workbooks;
 
 namespace Indtec.ExcelMapper;
 
+/// <summary>Imports, exports and generates Excel workbooks for source-generated mapped models.</summary>
 public sealed class ExcelMapper
 {
     private readonly IExcelMessageProvider _messages;
 
     internal IExcelMessageProvider Messages => _messages;
 
+    /// <summary>Creates a mapper using the default options and English built-in messages.</summary>
     public ExcelMapper()
         : this(new ExcelMapperOptions())
     {
     }
 
+    /// <summary>Creates a mapper using the supplied localization and message options.</summary>
     public ExcelMapper(ExcelMapperOptions options)
     {
         if (options is null) throw new ArgumentNullException(nameof(options));
         _messages = options.ResolveMessages();
     }
 
+    /// <summary>Creates a mapper and configures localization and generated messages.</summary>
     public ExcelMapper(Action<ExcelMapperOptions> configure)
     {
         if (configure is null) throw new ArgumentNullException(nameof(configure));
@@ -33,9 +37,11 @@ public sealed class ExcelMapper
         _messages = options.ResolveMessages();
     }
 
+    /// <summary>Imports valid items from the mapped worksheet in an XLSX stream.</summary>
     public IReadOnlyList<T> Import<T>(Stream stream) where T : new()
         => Import<T>(stream, null).Items;
 
+    /// <summary>Imports a mapped worksheet and returns items plus structured validation errors.</summary>
     public ExcelImportResult<T> Import<T>(
         Stream stream,
         Action<ExcelImportOptions<T>>? configure) where T : new()
@@ -138,6 +144,7 @@ public sealed class ExcelMapper
         return new ExcelImportResult<T>(items, errors, reachedInvalidRowLimit: reachedInvalidRowLimit);
     }
 
+    /// <summary>Imports a mapped worksheet asynchronously, including optional batch validation.</summary>
     public async Task<ExcelImportResult<T>> ImportAsync<T>(
         Stream stream,
         Action<ExcelImportOptions<T>>? configure = null,
@@ -153,6 +160,7 @@ public sealed class ExcelMapper
         return await ImportSheetAsync<T>(workbook, options, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Imports multiple registered worksheets and runs optional workbook-level validation.</summary>
     public async Task<ExcelWorkbookImportResult> ImportWorkbookAsync(
         Stream stream,
         Action<ExcelWorkbookImportOptions> configure,
@@ -336,9 +344,11 @@ public sealed class ExcelMapper
         return new ExcelImportResult<T>(items, errors.ToArray(), rows, reachedInvalidRowLimit);
     }
 
+    /// <summary>Exports mapped items to an XLSX stream using default export options.</summary>
     public void Export<T>(IEnumerable<T> items, Stream stream) where T : new()
         => Export(items, stream, null);
 
+    /// <summary>Exports mapped items to an XLSX stream using configurable worksheet options.</summary>
     public void Export<T>(
         IEnumerable<T> items,
         Stream stream,
@@ -362,9 +372,11 @@ public sealed class ExcelMapper
         workbook.SaveAs(stream);
     }
 
+    /// <summary>Exports mapped items to an XLSX file using default export options.</summary>
     public void Export<T>(IEnumerable<T> items, string path) where T : new()
         => Export(items, path, null);
 
+    /// <summary>Exports mapped items to an XLSX file using configurable worksheet options.</summary>
     public void Export<T>(
         IEnumerable<T> items,
         string path,
@@ -375,6 +387,7 @@ public sealed class ExcelMapper
         Export(items, stream, configure);
     }
 
+    /// <summary>Exports multiple registered worksheets to an XLSX stream.</summary>
     public void ExportWorkbook(
         Stream stream,
         Action<ExcelWorkbookExportOptions> configure)
@@ -395,6 +408,7 @@ public sealed class ExcelMapper
         workbook.SaveAs(stream);
     }
 
+    /// <summary>Exports multiple registered worksheets to an XLSX file.</summary>
     public void ExportWorkbook(
         string path,
         Action<ExcelWorkbookExportOptions> configure)
@@ -420,9 +434,11 @@ public sealed class ExcelMapper
         FinishWorksheet(worksheet, map, options);
     }
 
+    /// <summary>Generates a blank mapped worksheet template in an XLSX stream.</summary>
     public void CreateTemplate<T>(Stream stream) where T : new()
         => CreateTemplate<T>(stream, null);
 
+    /// <summary>Generates a configurable mapped worksheet template in an XLSX stream.</summary>
     public void CreateTemplate<T>(
         Stream stream,
         Action<ExcelExportOptions<T>>? configure) where T : new()
@@ -437,9 +453,11 @@ public sealed class ExcelMapper
         workbook.SaveAs(stream);
     }
 
+    /// <summary>Generates a blank mapped worksheet template as an XLSX file.</summary>
     public void CreateTemplate<T>(string path) where T : new()
         => CreateTemplate<T>(path, null);
 
+    /// <summary>Generates a configurable mapped worksheet template as an XLSX file.</summary>
     public void CreateTemplate<T>(
         string path,
         Action<ExcelExportOptions<T>>? configure) where T : new()
@@ -449,6 +467,7 @@ public sealed class ExcelMapper
         CreateTemplate<T>(stream, configure);
     }
 
+    /// <summary>Generates a multi-sheet workbook template in an XLSX stream.</summary>
     public void CreateWorkbookTemplate(
         Stream stream,
         Action<ExcelWorkbookTemplateOptions> configure)
@@ -469,6 +488,7 @@ public sealed class ExcelMapper
         workbook.SaveAs(stream);
     }
 
+    /// <summary>Generates a multi-sheet workbook template as an XLSX file.</summary>
     public void CreateWorkbookTemplate(
         string path,
         Action<ExcelWorkbookTemplateOptions> configure)
