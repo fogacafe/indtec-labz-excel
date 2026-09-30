@@ -410,6 +410,62 @@ public sealed class ExcelMapperTests
     }
 
     [Fact]
+    public void Import_AsPercentage_ShouldNormalizePercentageFormattedAndNumericCells()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Typed");
+            sheet.Cell(1, 1).Value = "When";
+            sheet.Cell(1, 2).Value = "Amount";
+            sheet.Cell(1, 3).Value = "Count";
+
+            sheet.Cell(2, 1).Value = new DateTime(2026, 9, 30);
+            sheet.Cell(2, 2).Value = 1d;
+            sheet.Cell(2, 2).Style.NumberFormat.NumberFormatId = 10;
+            sheet.Cell(2, 3).Value = 1;
+
+            sheet.Cell(3, 1).Value = new DateTime(2026, 9, 30);
+            sheet.Cell(3, 2).Value = 1d;
+            sheet.Cell(3, 2).Style.NumberFormat.NumberFormatId = 2;
+            sheet.Cell(3, 3).Value = 2;
+
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        var result = new ExcelMapper().Import<TypedRow>(stream, options =>
+            options.Column(x => x.Amount).AsPercentage());
+
+        Assert.Equal(2, result.Items.Count);
+        Assert.Equal(100m, result.Items[0].Amount);
+        Assert.Equal(100m, result.Items[1].Amount);
+    }
+
+    [Fact]
+    public void Import_AsPercentage_ShouldNormalizeFractionalValues()
+    {
+        using var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Typed");
+            sheet.Cell(1, 1).Value = "When";
+            sheet.Cell(1, 2).Value = "Amount";
+            sheet.Cell(1, 3).Value = "Count";
+            sheet.Cell(2, 1).Value = new DateTime(2026, 9, 30);
+            sheet.Cell(2, 2).Value = 0.5d;
+            sheet.Cell(2, 3).Value = 1;
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        var result = new ExcelMapper().Import<TypedRow>(stream, options =>
+            options.Column(x => x.Amount).AsPercentage());
+
+        Assert.Equal(50m, Assert.Single(result.Items).Amount);
+    }
+
+    [Fact]
     public void Import_MaxInvalidRows_ShouldStopAfterConfiguredNumberOfInvalidRows()
     {
         using var stream = new MemoryStream();
