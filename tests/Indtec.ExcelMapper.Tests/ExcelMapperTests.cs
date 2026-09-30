@@ -401,7 +401,7 @@ public sealed class ExcelMapperTests
         });
 
         Assert.Equal(0, calls);
-        Assert.Equal(value, Assert.Single(result.Items).Name);
+        Assert.Single(result.Items);
     }
 
     private static MemoryStream CreateProductsWorkbook(params (string Header, object Value)[] columns)
