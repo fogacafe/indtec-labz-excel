@@ -364,6 +364,46 @@ public sealed class ExcelMapperTests
         Assert.Empty(result.Items);
     }
 
+
+    [Fact]
+    public void Import_Normalize_ShouldRunBeforeValidation()
+    {
+        using var stream = CreateProductsWorkbook(("Id", 7), ("Name", "  Coffee  "));
+        var result = new ExcelMapper().Import<ProductRow>(stream, options =>
+        {
+            options.ErrorBehavior = ExcelImportErrorBehavior.Collect;
+            options.Column(x => x.Name)
+                .Normalize(value => value.Trim().PadLeft(10, '0'))
+                .Validate(value => value == "0000Coffee", "Name was not normalized.");
+        });
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal("0000Coffee", item.Name);
+        Assert.Empty(result.Errors);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Import_Normalize_ShouldSkipBlankStrings(string value)
+    {
+        using var stream = CreateProductsWorkbook(("Id", 7), ("Name", value));
+        var calls = 0;
+
+        var result = new ExcelMapper().Import<ProductRow>(stream, options =>
+        {
+            options.EmptyRowBehavior = ExcelEmptyRowBehavior.Include;
+            options.Column(x => x.Name).Normalize(text =>
+            {
+                calls++;
+                return text.Trim();
+            });
+        });
+
+        Assert.Equal(0, calls);
+        Assert.Single(result.Items);
+    }
+
     private static MemoryStream CreateProductsWorkbook(params (string Header, object Value)[] columns)
     {
         var stream = new MemoryStream();

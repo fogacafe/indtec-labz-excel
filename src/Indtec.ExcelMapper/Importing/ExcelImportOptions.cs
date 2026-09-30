@@ -19,6 +19,7 @@ public sealed class ExcelImportOptions<T>
 {
     internal List<ExcelRowValidationRule<T>> Validators { get; } = new();
     internal List<IExcelBatchValidator<T>> BatchValidators { get; } = new();
+    internal Dictionary<string, Func<object?, object?>> Normalizers { get; } = new(StringComparer.Ordinal);
 
     public ExcelImportErrorBehavior ErrorBehavior { get; set; } = ExcelImportErrorBehavior.Throw;
     public ExcelEmptyRowBehavior EmptyRowBehavior { get; set; } = ExcelEmptyRowBehavior.Ignore;
@@ -58,6 +59,9 @@ public sealed class ExcelImportOptions<T>
         return this;
     }
 
+    internal void AddNormalizer(string propertyName, Func<object?, object?> normalizer)
+        => Normalizers[propertyName] = normalizer;
+
     internal void ValidateConfiguration()
     {
         if (MaxInvalidRows is <= 0)
@@ -92,6 +96,17 @@ public sealed class ExcelImportColumnBuilder<T, TProperty>
     {
         if (predicate is null) throw new ArgumentNullException(nameof(predicate));
         return _options.AddValidation(row => predicate(_selector(row)), _propertyName, message);
+    }
+
+    /// <summary>
+    /// Normalizes a non-null, non-empty column value after conversion and before validation.
+    /// Null and blank string values are left unchanged.
+    /// </summary>
+    public ExcelImportColumnBuilder<T, TProperty> Normalize(Func<TProperty, TProperty> normalizer)
+    {
+        if (normalizer is null) throw new ArgumentNullException(nameof(normalizer));
+        _options.AddNormalizer(_propertyName, value => normalizer((TProperty)value!));
+        return this;
     }
 
     /// <summary>Adds a column error when the predicate evaluates to true.</summary>

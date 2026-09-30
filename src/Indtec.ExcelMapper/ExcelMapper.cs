@@ -111,6 +111,8 @@ public sealed class ExcelMapper
                 continue;
             }
 
+            NormalizeItem(item, map, options);
+
             var validationErrors = options.Validators
                 .Where(rule => !rule.Predicate(item))
                 .Select(rule => new ExcelImportError(row.RowNumber(), GetValidationColumn(map, rule.PropertyName), rule.Message))
@@ -275,6 +277,9 @@ public sealed class ExcelMapper
                     rowErrors.Add(new ExcelImportError(rowNumber, column.Header, ex.Message));
                 }
             }
+
+            if (rowErrors.Count == 0)
+                NormalizeItem(item, map, options);
 
             if (rowErrors.Count == 0)
             {
@@ -723,6 +728,22 @@ public sealed class ExcelMapper
             column.Style.NumberFormat.Format = "0";
         else if (type == typeof(string) || type == typeof(Guid) || type.IsEnum)
             column.Style.NumberFormat.Format = "@";
+    }
+
+    private static void NormalizeItem<T>(T item, ExcelTypeMap map, ExcelImportOptions<T> options)
+    {
+        foreach (var pair in options.Normalizers)
+        {
+            var column = map.Columns.First(x => x.PropertyName == pair.Key);
+            if (column.Setter is null)
+                continue;
+
+            var value = column.Getter(item!);
+            if (value is null || value is string text && string.IsNullOrWhiteSpace(text))
+                continue;
+
+            column.Setter(item!, pair.Value(value));
+        }
     }
 
     private static bool HasReachedInvalidRowLimit(
